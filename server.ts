@@ -22,6 +22,12 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', server: 'Science Middle School Platform', time: new Date().toISOString() });
 });
 
+// Download full project archive
+app.get('/api/download-archive', (_req: Request, res: Response) => {
+  const archivePath = path.resolve(__dirname, 'science_platform.tar.gz');
+  res.download(archivePath, 'science_platform.tar.gz');
+});
+
 // Teacher Passcode Verification
 app.post('/api/verify-teacher', (req: Request, res: Response) => {
   const { passcode } = req.body;
