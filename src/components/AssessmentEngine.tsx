@@ -11,13 +11,16 @@ import { GradeLevel } from '../types/science';
 interface AssessmentEngineProps {
   onNavigateToLesson?: (lessonId: string) => void;
   onNavigateToLab?: (labId: string) => void;
+  tests?: AssessmentTest[];
 }
 
 export const AssessmentEngine: React.FC<AssessmentEngineProps> = ({
   onNavigateToLesson,
   onNavigateToLab,
+  tests = COMPREHENSIVE_TESTS,
 }) => {
-  const [selectedTest, setSelectedTest] = useState<AssessmentTest>(COMPREHENSIVE_TESTS[0]);
+  const currentTests = tests && tests.length > 0 ? tests : COMPREHENSIVE_TESTS;
+  const [selectedTest, setSelectedTest] = useState<AssessmentTest>(currentTests[0]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, number>>({});
   const [isTestActive, setIsTestActive] = useState<boolean>(false);
@@ -157,7 +160,7 @@ export const AssessmentEngine: React.FC<AssessmentEngineProps> = ({
   };
 
   // Filtered tests
-  const filteredTests = COMPREHENSIVE_TESTS.filter(
+  const filteredTests = currentTests.filter(
     (t) => filterGrade === 'all' || t.grade === filterGrade
   );
 

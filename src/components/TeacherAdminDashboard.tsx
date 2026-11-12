@@ -809,7 +809,20 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  وصف مختصر أو عنوان فرعي:
+                </label>
+                <input
+                  type="text"
+                  placeholder="مثال: دراسة آلية القضاء على الخلايا المصابة بالتماس المباشر"
+                  value={lessonSubtitle}
+                  onChange={(e) => setLessonSubtitle(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     المستوى الدراسي:
@@ -840,6 +853,20 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                     <option value="earth_geology">الجيولوجيا والتكتونية</option>
                     <option value="plant_ecosystems">النبات والأنظمة البيئية</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    المدة التقديرية (دقيقة):
+                  </label>
+                  <input
+                    type="number"
+                    min="15"
+                    max="180"
+                    value={lessonDuration}
+                    onChange={(e) => setLessonDuration(Number(e.target.value) || 45)}
+                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
                 </div>
               </div>
 

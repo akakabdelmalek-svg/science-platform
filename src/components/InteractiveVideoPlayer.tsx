@@ -2,8 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { Play, Pause, RotateCcw, CheckCircle2, Award, BookOpen, Clock, ChevronRight, HelpCircle } from 'lucide-react';
 import { VIDEO_LESSONS, VideoLesson, VideoCheckpoint } from '../data/videoData';
 
-export const InteractiveVideoPlayer: React.FC = () => {
-  const [selectedLesson, setSelectedLesson] = useState<VideoLesson>(VIDEO_LESSONS[0]);
+interface InteractiveVideoPlayerProps {
+  videos?: VideoLesson[];
+}
+
+export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
+  videos = VIDEO_LESSONS,
+}) => {
+  const currentVideos = videos && videos.length > 0 ? videos : VIDEO_LESSONS;
+  const [selectedLesson, setSelectedLesson] = useState<VideoLesson>(currentVideos[0]);
+
+  useEffect(() => {
+    if (videos && videos.length > 0) {
+      if (!videos.some((v) => v.id === selectedLesson?.id)) {
+        setSelectedLesson(videos[0]);
+      }
+    }
+  }, [videos]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentSceneIndex, setCurrentSceneIndex] = useState<number>(0);
   const [activeCheckpoint, setActiveCheckpoint] = useState<VideoCheckpoint | null>(null);
@@ -237,12 +252,12 @@ export const InteractiveVideoPlayer: React.FC = () => {
         {/* Right Side: Playlist (4 cols) */}
         <div className="lg:col-span-4 space-y-3">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white px-1 flex items-center justify-between">
-            <span>قائمة الفيديوهات القصيرة ({VIDEO_LESSONS.length}):</span>
+            <span>قائمة الفيديوهات القصيرة ({currentVideos.length}):</span>
             <span className="text-xs text-slate-500 font-normal">مدة المقطع: 2 دقيقة</span>
           </h3>
 
           <div className="space-y-2.5">
-            {VIDEO_LESSONS.map((lesson) => {
+            {currentVideos.map((lesson) => {
               const isSelected = lesson.id === selectedLesson.id;
               const isCompleted = completedLessons.includes(lesson.id);
 

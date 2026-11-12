@@ -117,13 +117,58 @@ export default function App() {
     setActiveTab('labs');
   };
 
+  // Sync with Server on mount
+  useEffect(() => {
+    fetch('/api/lessons')
+      .then((res) => res.json())
+      .then((serverLessons) => {
+        if (Array.isArray(serverLessons) && serverLessons.length > 0) {
+          setLessons((prev) => {
+            const merged = [...serverLessons];
+            prev.forEach((p) => {
+              if (!merged.some((m) => m.id === p.id)) {
+                merged.push(p);
+              }
+            });
+            return merged;
+          });
+        }
+      })
+      .catch((err) => console.warn('Server lessons sync:', err));
+
+    fetch('/api/videos')
+      .then((res) => res.json())
+      .then((serverVideos) => {
+        if (Array.isArray(serverVideos) && serverVideos.length > 0) {
+          setVideos((prev) => {
+            const merged = [...serverVideos];
+            prev.forEach((p) => {
+              if (!merged.some((m) => m.id === p.id)) {
+                merged.push(p);
+              }
+            });
+            return merged;
+          });
+        }
+      })
+      .catch((err) => console.warn('Server videos sync:', err));
+  }, []);
+
   // Lesson Management (Teacher Admin)
   const handleAddLesson = (newLesson: LessonUnit) => {
     setLessons((prev) => [newLesson, ...prev]);
+    fetch('/api/lessons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLesson),
+    }).catch((err) => console.error('Failed to sync lesson to server:', err));
   };
 
   const handleDeleteLesson = (lessonId: string) => {
     setLessons((prev) => prev.filter((l) => l.id !== lessonId));
+    fetch(`/api/lessons/${lessonId}`, {
+      method: 'DELETE',
+    }).catch((err) => console.error('Failed to delete lesson on server:', err));
   };
 
   // Question Management (Teacher Admin)
@@ -144,10 +189,18 @@ export default function App() {
   // Video Management (Teacher Admin)
   const handleAddVideo = (newVideo: VideoLesson) => {
     setVideos((prev) => [newVideo, ...prev]);
+    fetch('/api/videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newVideo),
+    }).catch((err) => console.error('Failed to sync video to server:', err));
   };
 
   const handleDeleteVideo = (videoId: string) => {
     setVideos((prev) => prev.filter((v) => v.id !== videoId));
+    fetch(`/api/videos/${videoId}`, {
+      method: 'DELETE',
+    }).catch((err) => console.error('Failed to delete video on server:', err));
   };
 
   // Direct Teacher Question Box
@@ -221,7 +274,12 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-8">
         {activeTab === 'curriculum' && (
-          <CurriculumBrowser onOpenLab={handleNavigateToLab} />
+          <CurriculumBrowser
+            lessons={lessons}
+            onOpenLab={handleNavigateToLab}
+            onOpenAddLesson={() => setActiveTab('admin')}
+            onDeleteLesson={handleDeleteLesson}
+          />
         )}
 
         {activeTab === 'labs' && (
@@ -229,11 +287,12 @@ export default function App() {
         )}
 
         {activeTab === 'videos' && (
-          <InteractiveVideoPlayer />
+          <InteractiveVideoPlayer videos={videos} />
         )}
 
         {activeTab === 'assessments' && (
           <AssessmentEngine
+            tests={tests}
             onNavigateToLesson={handleNavigateToLesson}
             onNavigateToLab={handleNavigateToLab}
           />

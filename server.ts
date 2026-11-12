@@ -12,11 +12,59 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(express.json());
 
-// In-Memory Data Store (Cleaned state - all accounts and previous messages deleted)
+// In-Memory Data Store (Cleaned state - all accounts and previous lessons deleted)
+let lessons: any[] = [];
+let videos: any[] = [];
 let rankings: any[] = [];
 let directMessages: any[] = [];
 
 // =================== API ROUTES ===================
+
+// Lessons API
+app.get('/api/lessons', (_req: Request, res: Response) => {
+  res.json(lessons);
+});
+
+app.post('/api/lessons', (req: Request, res: Response) => {
+  const newLesson = req.body;
+  if (!newLesson || !newLesson.title) {
+    return res.status(400).json({ error: 'بيانات الدرس غير مكتملة' });
+  }
+  if (!newLesson.id) {
+    newLesson.id = `lesson-${Date.now()}`;
+  }
+  lessons = [newLesson, ...lessons];
+  res.json({ success: true, lesson: newLesson, total: lessons.length });
+});
+
+app.delete('/api/lessons/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  lessons = lessons.filter((l) => l.id !== id);
+  res.json({ success: true, remaining: lessons.length });
+});
+
+// Videos API
+app.get('/api/videos', (_req: Request, res: Response) => {
+  res.json(videos);
+});
+
+app.post('/api/videos', (req: Request, res: Response) => {
+  const newVideo = req.body;
+  if (!newVideo || !newVideo.title) {
+    return res.status(400).json({ error: 'بيانات الفيديو غير مكتملة' });
+  }
+  if (!newVideo.id) {
+    newVideo.id = `vid-${Date.now()}`;
+  }
+  videos = [newVideo, ...videos];
+  res.json({ success: true, video: newVideo });
+});
+
+app.delete('/api/videos/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  videos = videos.filter((v) => v.id !== id);
+  res.json({ success: true });
+});
 
 // Health check
 app.get('/api/health', (_req: Request, res: Response) => {
