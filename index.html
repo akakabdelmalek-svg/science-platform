@@ -12,6 +12,33 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Gracefully ignore disabled HMR WebSocket errors as required by runtime environment
+      window.addEventListener('error', function (e) {
+        var msg = e && (e.message || (e.error && e.error.message) || '');
+        if (
+          msg.includes('WebSocket') ||
+          msg.includes('@vite/client') ||
+          msg.includes('createWebSocketModuleRunnerTransport') ||
+          msg.includes('Failed to construct')
+        ) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) {
+        var reason = e && (e.reason ? (e.reason.message || String(e.reason)) : '');
+        if (
+          reason.includes('WebSocket') ||
+          reason.includes('@vite/client') ||
+          reason.includes('createWebSocketModuleRunnerTransport')
+        ) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
   </head>
   <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root"></div>
