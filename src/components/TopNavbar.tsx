@@ -85,7 +85,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 : 'hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            الاختبارات
+            التمارين والاختبارات
           </button>
           <button
             onClick={() => onSelectTab('leaderboard')}
@@ -206,7 +206,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           onClick={() => onSelectTab('assessments')}
           className={`px-2.5 py-1 rounded-md whitespace-nowrap shrink-0 ${activeTab === 'assessments' ? 'bg-emerald-600 text-white' : 'text-slate-600 dark:text-slate-400'}`}
         >
-          الاختبارات
+          التمارين والاختبارات
         </button>
         <button
           onClick={() => onSelectTab('leaderboard')}

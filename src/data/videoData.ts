@@ -1,4 +1,7 @@
 import { GradeLevel, ScienceDomain } from '../types/science';
+import digestionThumb from '../assets/images/digestion_system_villus_1794414991943.jpg';
+import nervousThumb from '../assets/images/nervous_reflex_arc_1794414992763.jpg';
+import geologyThumb from '../assets/images/earth_tectonics_geology_1794414992637.jpg';
 
 export interface VideoCheckpoint {
   timeSeconds: number;
@@ -36,7 +39,7 @@ export const VIDEO_LESSONS: VideoLesson[] = [
     grade: '4AM',
     domain: 'human_health',
     durationSeconds: 120,
-    thumbnail: '/src/assets/images/digestion_system_villus_1794414991943.jpg',
+    thumbnail: digestionThumb,
     description: 'مقطع تعليمي مجهري تفاعلي يوضح شكل جزيئة النشاء الضخمة الملتفة، وكيف يرتبط بها إنزيم الأميلاز في موقعه الفعال ليكسر الروابط الغليكوسيدية ويحرر جزيئات سكر المالتوز الثنائي.',
     learningOutcomes: [
       'فهم معنى التخصص والنوعية للإنزيمات',
@@ -88,7 +91,7 @@ export const VIDEO_LESSONS: VideoLesson[] = [
     grade: '4AM',
     domain: 'neuro_immunity',
     durationSeconds: 110,
-    thumbnail: '/src/assets/images/nervous_reflex_arc_1794414992763.jpg',
+    thumbnail: nervousThumb,
     description: 'شرح متحرك ثلاثي الأبعاد يبين سرعة انتقال السيالة العصبية من المستقبل الحسي في الجلد عبر الجذر الخلفي للنخاع الشوكي، وعودتها فوراً عبر الجذر الأمامي للعضلة لسحب اليد قبل وصول الإحساس الواعي للدماغ!',
     learningOutcomes: [
       'تحديد العناصر الخمسة لقوس الانعكاس',
@@ -133,7 +136,7 @@ export const VIDEO_LESSONS: VideoLesson[] = [
     grade: '3AM',
     domain: 'earth_geology',
     durationSeconds: 130,
-    thumbnail: '/src/assets/images/earth_tectonics_geology_1794414992637.jpg',
+    thumbnail: geologyThumb,
     description: 'محاكاة ديناميكية ثلاثية الأبعاد لحركة تقارب الصفائح التكتونية: غوص القشرة المحيطية البازلتية الثقيلة تحت القارة، انصهارها لتوليد الماغما اللزجة، وتشكل البراكين الانفجارية والزلازل العميقة.',
     learningOutcomes: [
       'فهم أسباب غوص الصفيحة المحيطية (فارق الكثافة)',

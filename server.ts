@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -10,10 +11,11 @@ const app = express();
 const PORT = 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // In-Memory Data Store (Cleaned state - all accounts and previous lessons deleted)
 let lessons: any[] = [];
+let exercises: any[] = [];
 let videos: any[] = [];
 let rankings: any[] = [];
 let directMessages: any[] = [];
@@ -33,7 +35,12 @@ app.post('/api/lessons', (req: Request, res: Response) => {
   if (!newLesson.id) {
     newLesson.id = `lesson-${Date.now()}`;
   }
-  lessons = [newLesson, ...lessons];
+  const existsIndex = lessons.findIndex((l) => l.id === newLesson.id);
+  if (existsIndex >= 0) {
+    lessons[existsIndex] = newLesson;
+  } else {
+    lessons = [newLesson, ...lessons];
+  }
   res.json({ success: true, lesson: newLesson, total: lessons.length });
 });
 
@@ -41,6 +48,34 @@ app.delete('/api/lessons/:id', (req: Request, res: Response) => {
   const { id } = req.params;
   lessons = lessons.filter((l) => l.id !== id);
   res.json({ success: true, remaining: lessons.length });
+});
+
+// Exercises API
+app.get('/api/exercises', (_req: Request, res: Response) => {
+  res.json(exercises);
+});
+
+app.post('/api/exercises', (req: Request, res: Response) => {
+  const newExercise = req.body;
+  if (!newExercise || !newExercise.title) {
+    return res.status(400).json({ error: 'بيانات التمرين غير مكتملة' });
+  }
+  if (!newExercise.id) {
+    newExercise.id = `ex-${Date.now()}`;
+  }
+  const existsIndex = exercises.findIndex((ex) => ex.id === newExercise.id);
+  if (existsIndex >= 0) {
+    exercises[existsIndex] = newExercise;
+  } else {
+    exercises = [newExercise, ...exercises];
+  }
+  res.json({ success: true, exercise: newExercise, total: exercises.length });
+});
+
+app.delete('/api/exercises/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  exercises = exercises.filter((ex) => ex.id !== id);
+  res.json({ success: true, remaining: exercises.length });
 });
 
 // Videos API
@@ -74,6 +109,9 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Download full project archive
 app.get('/api/download-archive', (_req: Request, res: Response) => {
   const archivePath = path.resolve(__dirname, 'science_platform.tar.gz');
+  if (!fs.existsSync(archivePath)) {
+    return res.status(404).json({ error: 'Archive not found' });
+  }
   res.download(archivePath, 'science_platform.tar.gz');
 });
 
@@ -94,13 +132,13 @@ app.get('/api/rankings', (_req: Request, res: Response) => {
 });
 
 app.post('/api/rankings', (req: Request, res: Response) => {
-  const { firstName, grade, points, avatar, badge } = req.body;
+  const { firstName, grade, points, avatar, badge, testsCompleted } = req.body;
   if (!firstName) {
     return res.status(400).json({ error: 'الاسم الأول مطلوب للترتيب' });
   }
 
   // Clean first name: take only the first word to ensure "first name only for the classment"
-  const cleanFirstName = firstName.trim().split(/\s+/)[0];
+  const cleanFirstName = String(firstName).trim().split(/\s+/)[0];
 
   const existingIndex = rankings.findIndex(
     (r) => r.firstName.toLowerCase() === cleanFirstName.toLowerCase() && r.grade === grade
@@ -110,16 +148,23 @@ app.post('/api/rankings', (req: Request, res: Response) => {
     rankings[existingIndex].points = Math.max(rankings[existingIndex].points, points || 0);
     if (avatar) rankings[existingIndex].avatar = avatar;
     if (badge) rankings[existingIndex].badge = badge;
+    if (typeof testsCompleted === 'number') {
+      rankings[existingIndex].testsCompleted = Math.max(
+        rankings[existingIndex].testsCompleted || 0,
+        testsCompleted
+      );
+    }
   } else {
     rankings.push({
       id: `st-${Date.now()}`,
       firstName: cleanFirstName,
+      name: cleanFirstName,
       grade: grade || '4AM',
       points: points || 150,
       avatar: avatar || '👨‍🎓',
       rank: rankings.length + 1,
       badge: badge || 'تلميذ مجتهد ⭐',
-      testsCompleted: 1,
+      testsCompleted: testsCompleted || 0,
     });
   }
 
@@ -141,7 +186,7 @@ app.post('/api/messages', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'نص السؤال مطلوب' });
   }
 
-  const cleanFirstName = (studentName || 'تلميذ').trim().split(/\s+/)[0];
+  const cleanFirstName = String(studentName || 'تلميذ').trim().split(/\s+/)[0];
 
   const newMsg = {
     id: `msg-${Date.now()}`,
@@ -149,7 +194,7 @@ app.post('/api/messages', (req: Request, res: Response) => {
     studentName: cleanFirstName,
     studentGrade: studentGrade || '4AM',
     topic: topic || 'علوم عامة',
-    questionText: questionText.trim(),
+    questionText: String(questionText).trim(),
     status: 'pending' as const,
     createdAt: 'الآن',
   };
@@ -178,23 +223,40 @@ app.post('/api/messages/:id/reply', (req: Request, res: Response) => {
 // =================== SERVE FRONTEND ===================
 
 async function startServer() {
-  if (!isProduction) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-    });
-  }
+  try {
+    if (!isProduction) {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          hmr: false,
+          watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
+        },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.resolve(__dirname, 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (_req: Request, res: Response) => {
+        res.sendFile(path.resolve(distPath, 'index.html'));
+      });
+    }
 
-  app.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-  });
+    const server = app.listen(Number(PORT), '0.0.0.0', () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+    });
+
+    server.on('error', (err: any) => {
+      console.error('HTTP server error:', err);
+      if (err?.code === 'EADDRINUSE') {
+        process.exit(1);
+      }
+    });
+  } catch (err) {
+    console.error('Failed to start dev server:', err);
+    process.exit(1);
+  }
 }
 
 startServer();

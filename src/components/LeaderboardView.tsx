@@ -6,17 +6,22 @@ import { GradeLevel } from '../types/science';
 
 interface LeaderboardViewProps {
   currentUser?: UserProfile | null;
+  rankings?: StudentRanking[];
 }
 
-export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ currentUser }) => {
+export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
+  currentUser,
+  rankings: externalRankings = INITIAL_RANKINGS,
+}) => {
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel | 'all'>('all');
-  const [rankings, setRankings] = useState<StudentRanking[]>(INITIAL_RANKINGS);
 
   // If currentUser is a student, incorporate their current points into the view
-  const displayRankings = [...rankings];
+  const displayRankings = externalRankings.map((r) => ({ ...r }));
   if (currentUser && currentUser.role === 'student') {
     const studentFirst = currentUser.firstName || currentUser.name || 'تلميذ';
-    const existingIndex = displayRankings.findIndex((r) => r.id === currentUser.id || r.firstName === studentFirst);
+    const existingIndex = displayRankings.findIndex(
+      (r) => r.id === currentUser.id || r.firstName === studentFirst
+    );
     if (existingIndex >= 0) {
       displayRankings[existingIndex].points = currentUser.points;
     } else {
@@ -44,8 +49,9 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ currentUser })
   const remaining = filtered.slice(3);
 
   // Find user rank
+  const currentFirstName = currentUser?.firstName || currentUser?.name;
   const myRankItem = currentUser
-    ? filtered.find((r) => r.name === currentUser.name)
+    ? filtered.find((r) => r.id === currentUser.id || r.firstName === currentFirstName)
     : null;
 
   return (

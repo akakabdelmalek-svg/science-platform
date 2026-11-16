@@ -1,21 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, Lock, Plus, Trash2, Edit3, CheckCircle2, 
   BookOpen, Video, HelpCircle, User, MessageCircle, 
-  BarChart3, Sparkles, X, Send, Eye, KeyRound 
+  BarChart3, Sparkles, X, Send, Eye, KeyRound, FileText, ArrowLeft
 } from 'lucide-react';
-import { LessonUnit, GradeLevel, ScienceDomain } from '../types/science';
+import { LessonUnit, GradeLevel, ScienceDomain, TeacherExercise } from '../types/science';
 import { AssessmentTest, AssessmentQuestion } from '../types/assessment';
 import { VideoLesson } from '../data/videoData';
 import { DirectTeacherMessage, StudentRanking, UserProfile } from '../types/user';
+import heroBiologyThumb from '../assets/images/science_hero_biology_1794414991383.jpg';
 
 interface TeacherAdminDashboardProps {
   lessons: LessonUnit[];
   onAddLesson: (lesson: LessonUnit) => void;
   onDeleteLesson: (lessonId: string) => void;
 
+  exercises: TeacherExercise[];
+  onAddExercise: (exercise: TeacherExercise) => void;
+  onDeleteExercise: (exerciseId: string) => void;
+
   tests: AssessmentTest[];
-  onAddQuestion: (testId: string, question: AssessmentQuestion) => void;
+  onAddQuestion: (testId: string, question: AssessmentQuestion, fallbackGrade?: GradeLevel) => void;
   onDeleteQuestion: (testId: string, questionId: string) => void;
 
   videos: VideoLesson[];
@@ -27,12 +32,18 @@ interface TeacherAdminDashboardProps {
 
   rankings: StudentRanking[];
   currentUser?: UserProfile | null;
+  initialSubtab?: 'lessons' | 'exercises' | 'videos' | 'questions_box' | 'student_levels';
+  onNavigateToLessons?: (grade?: GradeLevel | 'all') => void;
+  onNavigateToExercises?: (grade?: GradeLevel | 'all') => void;
 }
 
 export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   lessons,
   onAddLesson,
   onDeleteLesson,
+  exercises,
+  onAddExercise,
+  onDeleteExercise,
   tests,
   onAddQuestion,
   onDeleteQuestion,
@@ -43,6 +54,9 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   onReplyDirectMessage,
   rankings,
   currentUser,
+  initialSubtab = 'lessons',
+  onNavigateToLessons,
+  onNavigateToExercises,
 }) => {
   // Authentication state for teacher
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(currentUser?.role === 'teacher');
@@ -50,12 +64,24 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Active Admin Subtab
-  const [activeTab, setActiveTab] = useState<'lessons' | 'exercises' | 'videos' | 'questions_box' | 'student_levels'>('lessons');
+  const [activeTab, setActiveTab] = useState<'lessons' | 'exercises' | 'videos' | 'questions_box' | 'student_levels'>(initialSubtab);
+
+  useEffect(() => {
+    setActiveTab(initialSubtab);
+  }, [initialSubtab]);
 
   // Modals
   const [showAddLessonModal, setShowAddLessonModal] = useState<boolean>(false);
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState<boolean>(false);
   const [showAddQuestionModal, setShowAddQuestionModal] = useState<boolean>(false);
   const [showAddVideoModal, setShowAddVideoModal] = useState<boolean>(false);
+
+  // Inline Delete Confirm Key
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+
+  // Last added notice for quick jump
+  const [lastAddedLessonGrade, setLastAddedLessonGrade] = useState<GradeLevel | null>(null);
+  const [lastAddedExerciseGrade, setLastAddedExerciseGrade] = useState<GradeLevel | null>(null);
 
   // Replying to a student question
   const [replyingMessageId, setReplyingMessageId] = useState<string | null>(null);
@@ -71,7 +97,18 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   const [lessonSummary, setLessonSummary] = useState<string>('');
   const [lessonKeyConcept, setLessonKeyConcept] = useState<string>('');
 
+  // New Applied Exercise Form
+  const [exTitle, setExTitle] = useState<string>('');
+  const [exGrade, setExGrade] = useState<GradeLevel>('4AM');
+  const [exDomain, setExDomain] = useState<ScienceDomain>('human_health');
+  const [exLessonId, setExLessonId] = useState<string>('');
+  const [exDifficulty, setExDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [exStatement, setExStatement] = useState<string>('');
+  const [exInstructions, setExInstructions] = useState<string>('');
+  const [exSolution, setExSolution] = useState<string>('');
+
   // New Question Form
+  const [questionGrade, setQuestionGrade] = useState<GradeLevel>('4AM');
   const [selectedTestId, setSelectedTestId] = useState<string>(tests[0]?.id || '');
   const [questionPrompt, setQuestionPrompt] = useState<string>('');
   const [questionTopic, setQuestionTopic] = useState<string>('الهضم والإنزيمات');
@@ -82,6 +119,15 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   const [correctIndex, setCorrectIndex] = useState<number>(0);
   const [explanation, setExplanation] = useState<string>('');
   const [competency, setCompetency] = useState<'recall' | 'reasoning' | 'document_analysis'>('recall');
+
+  useEffect(() => {
+    const matchingTest = tests.find((t) => t.grade === questionGrade);
+    if (matchingTest) {
+      setSelectedTestId(matchingTest.id);
+    } else if (tests[0]) {
+      setSelectedTestId(tests[0].id);
+    }
+  }, [questionGrade, tests]);
 
   // New Video Form
   const [videoTitle, setVideoTitle] = useState<string>('');
@@ -137,11 +183,42 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
     };
 
     onAddLesson(newLesson);
+    setLastAddedLessonGrade(lessonGrade);
     setShowAddLessonModal(false);
     setLessonTitle('');
+    setLessonSubtitle('');
     setLessonSummary('');
     setLessonKeyConcept('');
-    showToast('تمت إضافة الدرس الجديد بنجاح إلى منصة العلوم!');
+    showToast('تمت إضافة الدرس الجديد بنجاح وسيظهر مباشرة في قسم الدروس!');
+  };
+
+  // Add Applied Exercise Submit
+  const handleCreateExercise = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!exTitle.trim() || !exStatement.trim() || !exInstructions.trim()) return;
+
+    const newExercise: TeacherExercise = {
+      id: `ex-${Date.now()}`,
+      title: exTitle.trim(),
+      grade: exGrade,
+      domain: exDomain,
+      lessonId: exLessonId || undefined,
+      difficulty: exDifficulty,
+      statement: exStatement.trim(),
+      instructions: exInstructions.trim(),
+      solution: exSolution.trim() || 'سيتم مناقشة الحل النموذجي مع الأستاذ في الحصة.',
+      createdAt: new Date().toLocaleDateString('ar-EG'),
+    };
+
+    onAddExercise(newExercise);
+    setLastAddedExerciseGrade(exGrade);
+    setShowAddExerciseModal(false);
+    setExTitle('');
+    setExLessonId('');
+    setExStatement('');
+    setExInstructions('');
+    setExSolution('');
+    showToast('تمت إضافة التمرين التطبيقي بنجاح إلى قسم التمارين والاختبارات!');
   };
 
   // Add Question Submit
@@ -149,20 +226,25 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
     e.preventDefault();
     if (!questionPrompt.trim() || !opt0.trim() || !opt1.trim()) return;
 
+    const targetTest =
+      tests.find((t) => t.id === selectedTestId) ||
+      tests.find((t) => t.grade === questionGrade) ||
+      tests[0];
+
     const newQ: AssessmentQuestion = {
       id: `q-${Date.now()}`,
-      topic: questionTopic,
+      topic: questionTopic.trim() || 'موضوع علمي',
       domain: 'human_health',
       competency,
       prompt: questionPrompt.trim(),
-      options: [opt0.trim(), opt1.trim(), opt2.trim() || 'خيار إضافي', opt3.trim() || 'خيار إضافي'],
+      options: [opt0.trim(), opt1.trim(), opt2.trim() || 'خيار ثالث', opt3.trim() || 'خيار رابع'],
       correctIndex,
       explanation: explanation.trim() || 'تفسير علمي منهجي يوضح سبب صحة الإجابة.',
       recommendedLessonId: 'lesson-4am-digestion',
-      conceptName: questionTopic,
+      conceptName: questionTopic.trim() || 'مفهوم علمي',
     };
 
-    onAddQuestion(selectedTestId, newQ);
+    onAddQuestion(targetTest?.id || `test-${questionGrade.toLowerCase()}`, newQ, questionGrade);
     setShowAddQuestionModal(false);
     setQuestionPrompt('');
     setOpt0('');
@@ -170,7 +252,7 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
     setOpt2('');
     setOpt3('');
     setExplanation('');
-    showToast('تمت إضافة السؤال والتمرين الجديد إلى بنك الاختبارات!');
+    showToast('تمت إضافة السؤال التفاعلي الجديد إلى بنك الاختبارات!');
   };
 
   // Add Video Submit
@@ -185,7 +267,7 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
       grade: videoGrade,
       domain: 'human_health',
       durationSeconds: 120,
-      thumbnail: '/src/assets/images/science_hero_biology_1794414991383.jpg',
+      thumbnail: heroBiologyThumb,
       description: videoDesc.trim() || 'مقطع تعليمي مركز يشرح المفهوم خطوة بخطوة.',
       learningOutcomes: ['التحكم في المفهوم العلمي', 'التطبيق المخبري المباشر'],
       keyConcept: videoTitle.trim(),
@@ -435,126 +517,312 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
       {/* ================= Tab 1: Manage Lessons ================= */}
       {activeTab === 'lessons' && (
         <div className="space-y-4 animate-fade-in">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               قائمة الدروس والمفاهيم المقررة في المنهاج:
             </h3>
-            <button
-              onClick={() => setShowAddLessonModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>إضافة درس جديد</span>
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {lessons.map((lesson) => (
-              <div
-                key={lesson.id}
-                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
+            <div className="flex items-center gap-2">
+              {onNavigateToLessons && (
+                <button
+                  onClick={() => onNavigateToLessons('all')}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-emerald-600" />
+                  <span>عرض الدروس في قسم الدروس</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowAddLessonModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
               >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                      {lesson.grade}
-                    </span>
-                    <span>·</span>
-                    <span>{lesson.durationMinutes} دقيقة</span>
-                    <span>·</span>
-                    <span>{lesson.domain}</span>
-                  </div>
-
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    {lesson.title}
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                    {lesson.summary}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => {
-                      if (window.confirm(`هل أنت متأكد من حذف درس: "${lesson.title}"؟`)) {
-                        onDeleteLesson(lesson.id);
-                        showToast(`تم حذف درس: ${lesson.title}`);
-                      }
-                    }}
-                    className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
-                    title="حذف الدرس"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+                <Plus className="w-4 h-4" />
+                <span>إضافة درس جديد</span>
+              </button>
+            </div>
           </div>
+
+          {lastAddedLessonGrade && onNavigateToLessons && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                ✓ تم نشر الدرس بنجاح في مستوى {lastAddedLessonGrade}! يمكنك الآن معاينته في قسم الدروس.
+              </span>
+              <button
+                onClick={() => onNavigateToLessons(lastAddedLessonGrade)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white font-bold rounded-lg cursor-pointer"
+              >
+                <span>الذهاب إلى قسم الدروس</span>
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {lessons.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+              لا توجد دروس مضافة حالياً. اضغط على "إضافة درس جديد" لنشر أول درس وسيظهر مباشرة في قسم الدروس.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {lessons.map((lesson) => {
+                const delKey = `lesson:${lesson.id}`;
+                return (
+                  <div
+                    key={lesson.id}
+                    className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {lesson.grade}
+                        </span>
+                        <span>·</span>
+                        <span>{lesson.durationMinutes} دقيقة</span>
+                        <span>·</span>
+                        <span>{lesson.domain}</span>
+                      </div>
+
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        {lesson.title}
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                        {lesson.summary}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {onNavigateToLessons && (
+                        <button
+                          onClick={() => onNavigateToLessons(lesson.grade)}
+                          className="px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 rounded-lg cursor-pointer flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>معاينة</span>
+                        </button>
+                      )}
+                      {confirmDeleteKey === delKey ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              onDeleteLesson(lesson.id);
+                              setConfirmDeleteKey(null);
+                              showToast(`تم حذف درس: ${lesson.title}`);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold bg-rose-600 text-white rounded-lg cursor-pointer"
+                          >
+                            تأكيد الحذف
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteKey(null)}
+                            className="px-2.5 py-1 text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg cursor-pointer"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteKey(delKey)}
+                          className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
+                          title="حذف الدرس"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
       {/* ================= Tab 2: Manage Exercises ================= */}
       {activeTab === 'exercises' && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="flex items-center justify-between">
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              إدارة بنك التمارين والأسئلة التشخيصية:
+              إدارة التمارين التطبيقية وبنك الأسئلة التشخيصية:
             </h3>
-            <button
-              onClick={() => setShowAddQuestionModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>إضافة سؤال/تمرين جديد</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {onNavigateToExercises && (
+                <button
+                  onClick={() => onNavigateToExercises('all')}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-indigo-600" />
+                  <span>عرض في قسم التمارين</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowAddExerciseModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>إضافة تمرين تطبيقي (مع الحل)</span>
+              </button>
+              <button
+                onClick={() => setShowAddQuestionModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>إضافة سؤال اختبار (QCM)</span>
+              </button>
+            </div>
           </div>
 
+          {lastAddedExerciseGrade && onNavigateToExercises && (
+            <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-bold text-indigo-800 dark:text-indigo-300">
+                ✓ تم نشر التمرين التطبيقي بنجاح لمستوى {lastAddedExerciseGrade}!
+              </span>
+              <button
+                onClick={() => onNavigateToExercises(lastAddedExerciseGrade)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white font-bold rounded-lg cursor-pointer"
+              >
+                <span>عرض في التمارين والاختبارات</span>
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Section A: Teacher Applied Exercises */}
           <div className="space-y-3">
-            {tests.flatMap((test) =>
-              test.questions.map((q, idx) => (
-                <div
-                  key={q.id}
-                  className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2 shadow-sm"
-                >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-600 dark:text-slate-300">
-                      [{test.grade}] {q.topic}
-                    </span>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('هل أنت متأكد من حذف هذا السؤال؟')) {
-                          onDeleteQuestion(test.id, q.id);
-                          showToast('تم حذف السؤال.');
-                        }
-                      }}
-                      className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors cursor-pointer"
-                      title="حذف السؤال"
+            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-indigo-600" />
+              <span>التمارين التطبيقية المضافة ({exercises.length})</span>
+            </h4>
+
+            {exercises.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                لم يتم إضافة تمارين تطبيقية بعد. اضغط على "إضافة تمرين تطبيقي (مع الحل)" لإنشاء تمرين علمي للتلاميذ.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {exercises.map((ex) => {
+                  const delKey = `ex:${ex.id}`;
+                  return (
+                    <div
+                      key={ex.id}
+                      className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2 shadow-sm"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <p className="text-xs font-bold text-slate-900 dark:text-white">
-                    {q.prompt}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-1 text-slate-600 dark:text-slate-400">
-                    {q.options.map((opt, oIdx) => (
-                      <div
-                        key={oIdx}
-                        className={`p-1.5 rounded ${
-                          oIdx === q.correctIndex
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800'
-                            : 'bg-slate-50 dark:bg-slate-800'
-                        }`}
-                      >
-                        {oIdx + 1}. {opt} {oIdx === q.correctIndex && '✓'}
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                            {ex.grade}
+                          </span>
+                          <span className="font-bold text-slate-900 dark:text-white">{ex.title}</span>
+                        </div>
+                        {confirmDeleteKey === delKey ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                onDeleteExercise(ex.id);
+                                setConfirmDeleteKey(null);
+                                showToast('تم حذف التمرين بنجاح.');
+                              }}
+                              className="px-2 py-1 text-[11px] font-bold bg-rose-600 text-white rounded cursor-pointer"
+                            >
+                              تأكيد الحذف
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteKey(null)}
+                              className="px-2 py-1 text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded cursor-pointer"
+                            >
+                              إلغاء
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteKey(delKey)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors cursor-pointer"
+                            title="حذف التمرين"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ))
+                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">{ex.statement}</p>
+                      <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30 p-2 rounded">
+                        <strong>المطلوب: </strong>{ex.instructions}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
+          </div>
+
+          {/* Section B: MCQ Diagnostic Questions */}
+          <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <HelpCircle className="w-4 h-4 text-emerald-600" />
+              <span>أسئلة الاختبارات التفاعلية (QCM)</span>
+            </h4>
+            <div className="space-y-3">
+              {tests.flatMap((test) =>
+                test.questions.map((q) => {
+                  const delKey = `q:${test.id}:${q.id}`;
+                  return (
+                    <div
+                      key={q.id}
+                      className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-600 dark:text-slate-300">
+                          [{test.grade}] {q.topic}
+                        </span>
+                        {confirmDeleteKey === delKey ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                onDeleteQuestion(test.id, q.id);
+                                setConfirmDeleteKey(null);
+                                showToast('تم حذف السؤال.');
+                              }}
+                              className="px-2 py-1 text-[11px] font-bold bg-rose-600 text-white rounded cursor-pointer"
+                            >
+                              تأكيد الحذف
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteKey(null)}
+                              className="px-2 py-1 text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded cursor-pointer"
+                            >
+                              إلغاء
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteKey(delKey)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors cursor-pointer"
+                            title="حذف السؤال"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {q.prompt}
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-1 text-slate-600 dark:text-slate-400">
+                        {q.options.map((opt, oIdx) => (
+                          <div
+                            key={oIdx}
+                            className={`p-1.5 rounded ${
+                              oIdx === q.correctIndex
+                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800'
+                                : 'bg-slate-50 dark:bg-slate-800'
+                            }`}
+                          >
+                            {oIdx + 1}. {opt} {oIdx === q.correctIndex && '✓'}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -576,43 +844,62 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
           </div>
 
           <div className="space-y-3">
-            {videos.map((vid) => (
-              <div
-                key={vid.id}
-                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                      {vid.grade}
-                    </span>
-                    <span>·</span>
-                    <span>{vid.durationSeconds} ثانية</span>
+            {videos.map((vid) => {
+              const delKey = `vid:${vid.id}`;
+              return (
+                <div
+                  key={vid.id}
+                  className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                        {vid.grade}
+                      </span>
+                      <span>·</span>
+                      <span>{vid.durationSeconds} ثانية</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                      {vid.title}
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                      {vid.description}
+                    </p>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    {vid.title}
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                    {vid.description}
-                  </p>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => {
-                      if (window.confirm(`هل أنت متأكد من حذف مقطع: "${vid.title}"؟`)) {
-                        onDeleteVideo(vid.id);
-                        showToast(`تم حذف الفيديو: ${vid.title}`);
-                      }
-                    }}
-                    className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
-                    title="حذف الفيديو"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {confirmDeleteKey === delKey ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            onDeleteVideo(vid.id);
+                            setConfirmDeleteKey(null);
+                            showToast(`تم حذف الفيديو: ${vid.title}`);
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-bold bg-rose-600 text-white rounded-lg cursor-pointer"
+                        >
+                          تأكيد الحذف
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteKey(null)}
+                          className="px-2.5 py-1 text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteKey(delKey)}
+                        className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
+                        title="حذف الفيديو"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -747,31 +1034,37 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
             </div>
 
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {rankings.map((st, idx) => (
-                <div
-                  key={st.id}
-                  className="grid grid-cols-12 p-3.5 text-xs items-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors text-right"
-                >
-                  <span className="col-span-1 font-mono font-bold text-slate-500">
-                    #{idx + 1}
-                  </span>
-                  <div className="col-span-4 flex items-center gap-2">
-                    <span className="text-lg">{st.avatar}</span>
-                    <span className="font-bold text-slate-900 dark:text-white">
-                      {st.name}
+              {rankings.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                  لا يوجد تلاميذ مسجلون في التصنيف حالياً. سيتم عرض أسماء التلاميذ الأوائل فور تسجيلهم بالاسم الأول.
+                </div>
+              ) : (
+                rankings.map((st, idx) => (
+                  <div
+                    key={st.id}
+                    className="grid grid-cols-12 p-3.5 text-xs items-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors text-right"
+                  >
+                    <span className="col-span-1 font-mono font-bold text-slate-500">
+                      #{idx + 1}
+                    </span>
+                    <div className="col-span-4 flex items-center gap-2">
+                      <span className="text-lg">{st.avatar}</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {st.firstName || st.name}
+                      </span>
+                    </div>
+                    <span className="col-span-2 font-medium text-slate-600 dark:text-slate-400">
+                      {st.grade}
+                    </span>
+                    <span className="col-span-3 text-amber-600 dark:text-amber-400 font-bold">
+                      {st.badge}
+                    </span>
+                    <span className="col-span-2 text-left font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                      {st.points} نقطة
                     </span>
                   </div>
-                  <span className="col-span-2 font-medium text-slate-600 dark:text-slate-400">
-                    {st.grade}
-                  </span>
-                  <span className="col-span-3 text-amber-600 dark:text-amber-400 font-bold">
-                    {st.badge}
-                  </span>
-                  <span className="col-span-2 text-left font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
-                    {st.points} نقطة
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -917,6 +1210,168 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
         </div>
       )}
 
+      {/* Modal: Add Applied Exercise */}
+      {showAddExerciseModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-right">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-indigo-600" />
+                <span>إضافة تمرين تطبيقي جديد للتلاميذ</span>
+              </h3>
+              <button
+                onClick={() => setShowAddExerciseModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateExercise} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  عنوان التمرين:
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: تمرين استرجاع المعارف حول الهضم الإنزيمي للنشا"
+                  value={exTitle}
+                  onChange={(e) => setExTitle(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    المستوى:
+                  </label>
+                  <select
+                    value={exGrade}
+                    onChange={(e) => setExGrade(e.target.value as GradeLevel)}
+                    className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="4AM">4 متوسط (BEM)</option>
+                    <option value="3AM">3 متوسط</option>
+                    <option value="2AM">2 متوسط</option>
+                    <option value="1AM">1 متوسط</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    المجال:
+                  </label>
+                  <select
+                    value={exDomain}
+                    onChange={(e) => setExDomain(e.target.value as ScienceDomain)}
+                    className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="human_health">الإنسان والصحة</option>
+                    <option value="neuro_immunity">الاتصال العصبي والمناعة</option>
+                    <option value="earth_geology">الجيولوجيا والتكتونية</option>
+                    <option value="plant_ecosystems">النبات والأنظمة البيئية</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    الصعوبة:
+                  </label>
+                  <select
+                    value={exDifficulty}
+                    onChange={(e) => setExDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
+                    className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="easy">سهل</option>
+                    <option value="medium">متوسط</option>
+                    <option value="hard">متقدم (وضعية إدماجية)</option>
+                  </select>
+                </div>
+              </div>
+
+              {lessons.length > 0 && (
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    ربط التمرين بدرس محدد (اختياري):
+                  </label>
+                  <select
+                    value={exLessonId}
+                    onChange={(e) => setExLessonId(e.target.value)}
+                    className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="">عرض عام في مستوى {exGrade}</option>
+                    {lessons.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        [{l.grade}] {l.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  نص التمرين والسند العلمي:
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="أكتب السياق العلمي والتجربة أو المعطيات..."
+                  value={exStatement}
+                  onChange={(e) => setExStatement(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  التعليمات والأسئلة المطلوبة:
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="1. حلل المنحنى... 2. فسر النتيجة... 3. استنتج..."
+                  value={exInstructions}
+                  onChange={(e) => setExInstructions(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  الحل النموذجي والتصحيح:
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="الإجابة النموذجية ليراجعها التلميذ بعد المحاولة..."
+                  value={exSolution}
+                  onChange={(e) => setExSolution(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddExerciseModal(false)}
+                  className="px-4 py-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  نشر التمرين التطبيقي
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Add Question */}
       {showAddQuestionModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -924,7 +1379,7 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Plus className="w-4 h-4 text-emerald-600" />
-                <span>إضافة سؤال/تمرين جديد لبنك التقييم</span>
+                <span>إضافة سؤال/تمرين تفاعلي لبنك التقييم</span>
               </h3>
               <button
                 onClick={() => setShowAddQuestionModal(false)}
@@ -935,6 +1390,41 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
             </div>
 
             <form onSubmit={handleCreateQuestion} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    المستوى الدراسي:
+                  </label>
+                  <select
+                    value={questionGrade}
+                    onChange={(e) => setQuestionGrade(e.target.value as GradeLevel)}
+                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="4AM">4 متوسط (BEM)</option>
+                    <option value="3AM">3 متوسط</option>
+                    <option value="2AM">2 متوسط</option>
+                    <option value="1AM">1 متوسط</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    الاختبار المستهدف:
+                  </label>
+                  <select
+                    value={selectedTestId}
+                    onChange={(e) => setSelectedTestId(e.target.value)}
+                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    {tests.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        [{t.grade}] {t.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                   نص السؤال:

@@ -2,22 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { 
   Award, CheckCircle2, XCircle, AlertCircle, TrendingUp, BookOpen, 
   RotateCcw, Clock, ArrowRight, ArrowLeft, Printer, Sparkles, Filter, 
-  BarChart3, Compass, Check
+  BarChart3, Compass, Check, Eye, Plus, FileText
 } from 'lucide-react';
 import { AssessmentTest, AssessmentReport, AssessmentQuestion } from '../types/assessment';
 import { COMPREHENSIVE_TESTS } from '../data/assessmentData';
-import { GradeLevel } from '../types/science';
+import { GradeLevel, TeacherExercise } from '../types/science';
 
 interface AssessmentEngineProps {
   onNavigateToLesson?: (lessonId: string) => void;
   onNavigateToLab?: (labId: string) => void;
   tests?: AssessmentTest[];
+  exercises?: TeacherExercise[];
+  onOpenAddExercise?: () => void;
 }
 
 export const AssessmentEngine: React.FC<AssessmentEngineProps> = ({
   onNavigateToLesson,
   onNavigateToLab,
   tests = COMPREHENSIVE_TESTS,
+  exercises = [],
+  onOpenAddExercise,
 }) => {
   const currentTests = tests && tests.length > 0 ? tests : COMPREHENSIVE_TESTS;
   const [selectedTest, setSelectedTest] = useState<AssessmentTest>(currentTests[0]);
@@ -27,6 +31,13 @@ export const AssessmentEngine: React.FC<AssessmentEngineProps> = ({
   const [secondsLeft, setSecondsLeft] = useState<number>(1800);
   const [assessmentReport, setAssessmentReport] = useState<AssessmentReport | null>(null);
   const [filterGrade, setFilterGrade] = useState<GradeLevel | 'all'>('all');
+  const [revealedSolutionIds, setRevealedSolutionIds] = useState<string[]>([]);
+
+  const toggleExerciseSolution = (exId: string) => {
+    setRevealedSolutionIds((prev) =>
+      prev.includes(exId) ? prev.filter((id) => id !== exId) : [...prev, exId]
+    );
+  };
 
   // Countdown timer when test is active
   useEffect(() => {
@@ -116,8 +127,9 @@ export const AssessmentEngine: React.FC<AssessmentEngineProps> = ({
       });
     });
 
-    const scoreOutOf20 = Math.round((correctCount / questions.length) * 20 * 10) / 10;
-    const percentage = Math.round((correctCount / questions.length) * 100);
+    const totalQs = questions.length || 1;
+    const scoreOutOf20 = Math.round((correctCount / totalQs) * 20 * 10) / 10;
+    const percentage = Math.round((correctCount / totalQs) * 100);
 
     let appreciation = 'ممتاز ومتمكن جداً من كفاءات المنهاج';
     if (scoreOutOf20 < 10) appreciation = 'بحاجة إلى تكثيف المراجعة واستدراك المفاهيم الأساسية';
@@ -152,22 +164,25 @@ export const AssessmentEngine: React.FC<AssessmentEngineProps> = ({
     setAssessmentReport(report);
   };
 
-  const currentQ = selectedTest.questions[currentQuestionIndex];
+  const currentQ = selectedTest?.questions[currentQuestionIndex];
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const s = secs % 60;
     return `${mins}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Filtered tests
+  // Filtered tests & teacher exercises
   const filteredTests = currentTests.filter(
     (t) => filterGrade === 'all' || t.grade === filterGrade
+  );
+  const filteredExercises = exercises.filter(
+    (ex) => filterGrade === 'all' || ex.grade === filterGrade
   );
 
   return (
     <div className="space-y-6">
       {/* Test Active View */}
-      {isTestActive ? (
+      {isTestActive && currentQ ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
           {/* Header Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-4">
@@ -495,73 +510,168 @@ export const AssessmentEngine: React.FC<AssessmentEngineProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                بنك الاختبارات والتقييمات التشخيصية
+                بنك التمارين التطبيقية والاختبارات التشخيصية
               </h3>
               <p className="text-xs text-slate-500">
-                اختر الاختبار المناسب لمستواك لبدء التقييم واستلام تقرير التشخيص واقتراحات التحسين
+                تدرّب على التمارين المضافة من الأستاذ أو أنجز اختباراً تفاعلياً للحصول على تقرير الأداء الفوري
               </p>
             </div>
 
-            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
-              {(['all', '4AM', '3AM', '2AM', '1AM'] as const).map((grade) => (
+            <div className="flex flex-wrap items-center gap-2">
+              {onOpenAddExercise && (
                 <button
-                  key={grade}
-                  onClick={() => setFilterGrade(grade)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                    filterGrade === grade
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm font-bold'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+                  onClick={onOpenAddExercise}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-sm"
                 >
-                  {grade === 'all' ? 'الكل' : grade}
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>إضافة تمرين جديد</span>
                 </button>
-              ))}
+              )}
+
+              <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                {(['all', '4AM', '3AM', '2AM', '1AM'] as const).map((grade) => (
+                  <button
+                    key={grade}
+                    onClick={() => setFilterGrade(grade)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+                      filterGrade === grade
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm font-bold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {grade === 'all' ? 'الكل' : grade}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Test Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredTests.map((test) => (
-              <div
-                key={test.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col justify-between hover:border-emerald-500 transition-all shadow-sm"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                      {test.grade === '4AM' ? '4 متوسط (BEM)' : `${test.grade.replace('AM', '')} متوسط`}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{test.durationMinutes} دقيقة</span>
-                    </span>
-                  </div>
+          {/* Teacher Added Applied Exercises Bank */}
+          <div id="exercises-div" className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>التمارين التطبيقية المضافة من الأستاذ ({filteredExercises.length})</span>
+              </h4>
+            </div>
 
-                  <h4 className="text-base font-bold text-slate-900 dark:text-white mt-1">
-                    {test.title}
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-                    {test.subtitle}
-                  </p>
-
-                  <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <span>عدد الأسئلة: <strong>{test.questions.length}</strong></span>
-                    <span>·</span>
-                    <span>العلامة الإجمالية: <strong>20/20</strong></span>
-                    <span>·</span>
-                    <span>تقرير فوري واقتراحات</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => startTest(test)}
-                  className="w-full mt-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <span>بدء الاختبار والتقييم</span>
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                </button>
+            {filteredExercises.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center space-y-2">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  لا توجد تمارين تطبيقية مضافة بعد {filterGrade !== 'all' ? `في مستوى ${filterGrade}` : ''}.
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  يمكن للأستاذ إضافة تمارين تطبيقية أو أسئلة جديدة من لوحة إدارة الأستاذ لتظهر هنا مباشرة للتلاميذ.
+                </p>
               </div>
-            ))}
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredExercises.map((ex) => {
+                  const isRevealed = revealedSolutionIds.includes(ex.id);
+                  return (
+                    <div
+                      key={ex.id}
+                      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-sm hover:border-indigo-400 dark:hover:border-indigo-700 transition-all"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
+                          {ex.grade === '4AM' ? '4 متوسط (BEM)' : `${ex.grade.replace('AM', '')} متوسط`}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          ex.difficulty === 'easy'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                            : ex.difficulty === 'hard'
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                        }`}>
+                          {ex.difficulty === 'easy' ? 'مستوى سهل' : ex.difficulty === 'hard' ? 'مستوى متقدم' : 'مستوى متوسط'}
+                        </span>
+                      </div>
+
+                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                        {ex.title}
+                      </h4>
+
+                      <div className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 whitespace-pre-line leading-relaxed">
+                        <strong className="block text-slate-900 dark:text-white mb-1">نص التمرين والسند:</strong>
+                        {ex.statement}
+                      </div>
+
+                      <div className="text-xs text-slate-800 dark:text-slate-200 p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50 whitespace-pre-line leading-relaxed">
+                        <strong className="block text-amber-900 dark:text-amber-300 mb-1">التعليمات / الأسئلة المطلوبة:</strong>
+                        {ex.instructions}
+                      </div>
+
+                      <button
+                        onClick={() => toggleExerciseSolution(ex.id)}
+                        className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>{isRevealed ? 'إخفاء الحل النموذجي' : 'عرض الحل النموذجي والتصحيح'}</span>
+                      </button>
+
+                      {isRevealed && (
+                        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-950 dark:text-emerald-100 whitespace-pre-line leading-relaxed animate-fade-in">
+                          <strong className="block text-emerald-700 dark:text-emerald-400 mb-1">الإجابة النموذجية والشرح العلمي:</strong>
+                          {ex.solution}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Interactive Diagnostic Tests Cards */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white px-1">
+              الاختبارات التفاعلية المقننة ({filteredTests.length})
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredTests.map((test) => (
+                <div
+                  key={test.id}
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col justify-between hover:border-emerald-500 transition-all shadow-sm"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                        {test.grade === '4AM' ? '4 متوسط (BEM)' : `${test.grade.replace('AM', '')} متوسط`}
+                      </span>
+                      <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{test.durationMinutes} دقيقة</span>
+                      </span>
+                    </div>
+
+                    <h4 className="text-base font-bold text-slate-900 dark:text-white mt-1">
+                      {test.title}
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                      {test.subtitle}
+                    </p>
+
+                    <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <span>عدد الأسئلة: <strong>{test.questions.length}</strong></span>
+                      <span>·</span>
+                      <span>العلامة الإجمالية: <strong>20/20</strong></span>
+                      <span>·</span>
+                      <span>تقرير فوري واقتراحات</span>
+                    </div>
+                  </div>
+
+                  <button
+                    disabled={test.questions.length === 0}
+                    onClick={() => startTest(test)}
+                    className="w-full mt-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <span>{test.questions.length === 0 ? 'لا توجد أسئلة حالياً' : 'بدء الاختبار والتقييم'}</span>
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

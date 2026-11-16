@@ -9,8 +9,12 @@ import { GradeLevel } from '../types/science';
 
 export const ResourceHub: React.FC = () => {
   const [resources, setResources] = useState<EducationalResource[]>(() => {
-    const saved = localStorage.getItem('science_platform_resources');
-    return saved ? JSON.parse(saved) : INITIAL_RESOURCES;
+    try {
+      const saved = localStorage.getItem('science_platform_resources');
+      return saved ? JSON.parse(saved) : INITIAL_RESOURCES;
+    } catch {
+      return INITIAL_RESOURCES;
+    }
   });
   const [selectedFormat, setSelectedFormat] = useState<string>('all');
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel | 'all'>('all');

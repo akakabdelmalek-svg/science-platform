@@ -88,6 +88,19 @@ export interface BemExercise {
   }[];
 }
 
+export interface TeacherExercise {
+  id: string;
+  title: string;
+  grade: GradeLevel;
+  domain: ScienceDomain;
+  lessonId?: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  statement: string;
+  instructions: string;
+  solution: string;
+  createdAt: string;
+}
+
 export interface UserProgress {
   completedLessons: string[];
   quizScores: { quizId: string; score: number; total: number; date: string }[];
