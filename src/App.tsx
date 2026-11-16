@@ -17,10 +17,18 @@ import { LESSONS_DATA } from './data/curriculumData';
 import { COMPREHENSIVE_TESTS } from './data/assessmentData';
 import { VIDEO_LESSONS, VideoLesson } from './data/videoData';
 import { INITIAL_RANKINGS, INITIAL_DIRECT_MESSAGES } from './data/rankingsData';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { LessonUnit, GradeLevel, TeacherExercise } from './types/science';
 import { AssessmentTest, AssessmentQuestion } from './types/assessment';
 import { UserProfile, StudentRanking, DirectTeacherMessage } from './types/user';
 import { saveLessonFile, getLessonFile, deleteLessonFile } from './utils/fileStorage';
+import {
+  auth,
+  signInWithGoogle,
+  signOutFirebase,
+  upsertStudentRankingInFirestore,
+  subscribeToClassmentRankings,
+} from './firebase';
 
 async function fetchJsonSafe(url: string): Promise<any[] | null> {
   try {
@@ -82,6 +90,11 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() =>
     safeJsonParse<UserProfile | null>('science_platform_user', null)
   );
+
+  // Firebase Auth & Classment state
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isFirebaseReady, setIsFirebaseReady] = useState<boolean>(false);
+  const [firebaseSyncError, setFirebaseSyncError] = useState<string | null>(null);
 
   // If no user account is set, modal is obligatorily open
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(!currentUser);
@@ -179,6 +192,95 @@ export default function App() {
 
   const handleNavigateToExercises = () => {
     setActiveTab('assessments');
+  };
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      setFirebaseUser(fbUser);
+      setIsFirebaseReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Subscribe to Firebase Firestore live classment rankings when authenticated
+  useEffect(() => {
+    if (!isFirebaseReady || !firebaseUser) return;
+
+    const unsubscribe = subscribeToClassmentRankings(
+      (cloudRankings) => {
+        setFirebaseSyncError(null);
+        setRankings((prev) => {
+          const merged = [...cloudRankings];
+          prev.forEach((localItem) => {
+            const exists = merged.some(
+              (m) =>
+                m.id === localItem.id ||
+                (m.firstName === localItem.firstName && m.grade === localItem.grade)
+            );
+            if (!exists) {
+              merged.push(localItem);
+            }
+          });
+          return merged
+            .sort((a, b) => b.points - a.points)
+            .map((item, idx) => ({ ...item, rank: idx + 1 }));
+        });
+      },
+      (err) => {
+        if (err.message.includes('Quota exceeded')) {
+          setFirebaseSyncError('تم تجاوز الحصة اليومية لـ Firebase، سيتم استعادة المزامنة غداً.');
+        } else {
+          setFirebaseSyncError('تعذرت مزامنة الترتيب عبر Firebase، تحقق من الاتصال أو الصلاحيات.');
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [isFirebaseReady, firebaseUser]);
+
+  // Sync student points updates automatically to Firebase Firestore
+  useEffect(() => {
+    if (!isFirebaseReady || !firebaseUser || !currentUser || currentUser.role !== 'student') {
+      return;
+    }
+    upsertStudentRankingInFirestore({
+      firstName: currentUser.firstName || currentUser.name || 'تلميذ',
+      grade: currentUser.grade || '4AM',
+      points: currentUser.points,
+      avatar: currentUser.avatar,
+      badge: 'تلميذ مجتهد ⭐',
+      testsCompleted: currentUser.testsCompleted,
+    }).catch((err) => {
+      console.warn('Firebase classment sync:', err);
+    });
+  }, [isFirebaseReady, firebaseUser, currentUser?.points, currentUser?.testsCompleted, currentUser?.firstName, currentUser?.grade, currentUser?.avatar]);
+
+  const handleGoogleSignIn = async (): Promise<FirebaseUser | null> => {
+    try {
+      setFirebaseSyncError(null);
+      const user = await signInWithGoogle();
+      if (currentUser && currentUser.role === 'student') {
+        await upsertStudentRankingInFirestore({
+          firstName: currentUser.firstName || currentUser.name || 'تلميذ',
+          grade: currentUser.grade || '4AM',
+          points: currentUser.points,
+          avatar: currentUser.avatar,
+          badge: 'تلميذ مجتهد ⭐',
+          testsCompleted: currentUser.testsCompleted,
+        });
+      }
+      return user;
+    } catch (err) {
+      setFirebaseSyncError('تعذر تسجيل الدخول عبر Google. تأكد من السماح بالنوافذ المنبثقة.');
+      return null;
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    try {
+      await signOutFirebase();
+    } catch {}
   };
 
   // Sync with IndexedDB & optional Server on mount
@@ -383,7 +485,7 @@ export default function App() {
     if (profile.role === 'student') {
       const studentFirst = profile.firstName || profile.name || 'تلميذ';
       const newRankEntry: StudentRanking = {
-        id: profile.id,
+        id: firebaseUser?.uid || profile.id,
         firstName: studentFirst,
         name: studentFirst,
         grade: profile.grade || '4AM',
@@ -394,17 +496,35 @@ export default function App() {
         testsCompleted: profile.testsCompleted,
       };
       setRankings((prev) => {
-        const exists = prev.some((r) => r.id === profile.id || r.firstName === studentFirst);
+        const exists = prev.some((r) => r.id === newRankEntry.id || r.firstName === studentFirst);
         if (!exists) {
           return [...prev, newRankEntry];
         }
-        return prev;
+        return prev.map((r) =>
+          r.id === newRankEntry.id || r.firstName === studentFirst
+            ? { ...r, ...newRankEntry, points: Math.max(r.points, newRankEntry.points) }
+            : r
+        );
       });
+
+      if (firebaseUser) {
+        upsertStudentRankingInFirestore({
+          firstName: studentFirst,
+          grade: profile.grade || '4AM',
+          points: profile.points,
+          avatar: profile.avatar,
+          badge: 'تلميذ مجتهد ⭐',
+          testsCompleted: profile.testsCompleted,
+        }).catch((err) => {
+          console.warn('Firestore ranking save failed:', err);
+        });
+      }
+
       fetch('/api/rankings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRankEntry),
-      }).catch((err) => console.warn('Rankings sync:', err));
+      }).catch(() => {});
     }
   };
 
@@ -460,7 +580,14 @@ export default function App() {
         )}
 
         {activeTab === 'leaderboard' && (
-          <LeaderboardView currentUser={currentUser} rankings={rankings} />
+          <LeaderboardView
+            currentUser={currentUser}
+            rankings={rankings}
+            firebaseUser={firebaseUser}
+            firebaseSyncError={firebaseSyncError}
+            onGoogleSignIn={handleGoogleSignIn}
+            onGoogleSignOut={handleGoogleSignOut}
+          />
         )}
 
         {activeTab === 'teacher_box' && (
@@ -544,6 +671,8 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         onSaveProfile={handleSaveProfile}
         currentProfile={currentUser}
+        firebaseUser={firebaseUser}
+        onGoogleSignIn={handleGoogleSignIn}
       />
 
       {/* Footer */}

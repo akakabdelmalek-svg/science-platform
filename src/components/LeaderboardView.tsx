@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Award, Trophy, Medal, Crown, Star, Sparkles, Filter, ChevronLeft } from 'lucide-react';
+import { Award, Trophy, Medal, Crown, Star, Sparkles, Filter, ChevronLeft, Cloud, LogOut } from 'lucide-react';
 import { StudentRanking, UserProfile } from '../types/user';
 import { INITIAL_RANKINGS } from '../data/rankingsData';
 import { GradeLevel } from '../types/science';
@@ -7,20 +7,42 @@ import { GradeLevel } from '../types/science';
 interface LeaderboardViewProps {
   currentUser?: UserProfile | null;
   rankings?: StudentRanking[];
+  firebaseUser?: { uid: string; email?: string | null; displayName?: string | null } | null;
+  firebaseSyncError?: string | null;
+  onGoogleSignIn?: () => Promise<any> | void;
+  onGoogleSignOut?: () => Promise<void> | void;
 }
 
 export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   currentUser,
   rankings: externalRankings = INITIAL_RANKINGS,
+  firebaseUser,
+  firebaseSyncError,
+  onGoogleSignIn,
+  onGoogleSignOut,
 }) => {
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel | 'all'>('all');
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
+
+  const handleConnectGoogle = async () => {
+    if (!onGoogleSignIn) return;
+    setIsConnecting(true);
+    try {
+      await onGoogleSignIn();
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   // If currentUser is a student, incorporate their current points into the view
   const displayRankings = externalRankings.map((r) => ({ ...r }));
   if (currentUser && currentUser.role === 'student') {
     const studentFirst = currentUser.firstName || currentUser.name || 'تلميذ';
     const existingIndex = displayRankings.findIndex(
-      (r) => r.id === currentUser.id || r.firstName === studentFirst
+      (r) =>
+        r.id === currentUser.id ||
+        (firebaseUser && r.id === firebaseUser.uid) ||
+        r.firstName === studentFirst
     );
     if (existingIndex >= 0) {
       displayRankings[existingIndex].points = currentUser.points;
@@ -83,6 +105,61 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                 {myRankItem ? `المرتبة رقم #${myRankItem.rank} في التصنيف` : 'واصل حل الاختبارات لترقية رتبتك'}
               </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Firebase Cloud Classment Banner */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+            firebaseUser
+              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+              : 'bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400'
+          }`}>
+            <Cloud className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-slate-900 dark:text-white">
+              {firebaseUser
+                ? 'متصل بـ Firebase Classment (الترتيب السحابي المباشر)'
+                : 'المزامنة السحابية للترتيب عبر Firebase'}
+            </div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              {firebaseUser
+                ? `يتم حفظ نقاطك وتحديث تصنيفك مباشرة في قاعدة بيانات Firebase (${firebaseUser.email || 'حساب موثق'})`
+                : 'سجّل الدخول عبر Google لحفظ نقاطك ومنافستك مع جميع التلاميذ في التصنيف السحابي.'}
+            </div>
+            {firebaseSyncError && (
+              <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold mt-1">
+                {firebaseSyncError}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          {firebaseUser ? (
+            onGoogleSignOut && (
+              <button
+                onClick={onGoogleSignOut}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>فصل حساب Google</span>
+              </button>
+            )
+          ) : (
+            onGoogleSignIn && (
+              <button
+                onClick={handleConnectGoogle}
+                disabled={isConnecting}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-sm"
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>{isConnecting ? 'جارٍ الاتصال...' : 'ربط Google للتصنيف المباشر'}</span>
+              </button>
+            )
           )}
         </div>
       </div>
@@ -184,62 +261,71 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
         </div>
 
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {filtered.map((item) => {
-            const isMe = currentUser?.name === item.name;
-            return (
-              <div
-                key={item.id}
-                className={`p-4 flex items-center justify-between transition-colors ${
-                  isMe
-                    ? 'bg-amber-50/70 dark:bg-amber-950/40 border-r-4 border-amber-500'
-                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold font-mono ${
-                    item.rank === 1
-                      ? 'bg-amber-400 text-slate-950'
-                      : item.rank === 2
-                      ? 'bg-slate-300 text-slate-800'
-                      : item.rank === 3
-                      ? 'bg-amber-700 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}>
-                    {item.rank}
-                  </span>
+          {filtered.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+              لا توجد أسماء مسجلة في هذا التصنيف حالياً. أدخل اسمك الأول أو اربط حساب Google للظهور في لوحة الشرف.
+            </div>
+          ) : (
+            filtered.map((item) => {
+              const isMe =
+                item.id === currentUser?.id ||
+                (firebaseUser && item.id === firebaseUser.uid) ||
+                Boolean(currentFirstName && item.firstName === currentFirstName);
+              return (
+                <div
+                  key={item.id}
+                  className={`p-4 flex items-center justify-between transition-colors ${
+                    isMe
+                      ? 'bg-amber-50/70 dark:bg-amber-950/40 border-r-4 border-amber-500'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold font-mono ${
+                      item.rank === 1
+                        ? 'bg-amber-400 text-slate-950'
+                        : item.rank === 2
+                        ? 'bg-slate-300 text-slate-800'
+                        : item.rank === 3
+                        ? 'bg-amber-700 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}>
+                      {item.rank}
+                    </span>
 
-                  <span className="text-2xl">{item.avatar}</span>
+                    <span className="text-2xl">{item.avatar}</span>
 
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs md:text-sm font-bold text-slate-900 dark:text-white">
-                        {item.name}
-                      </span>
-                      {isMe && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-bold">
-                          أنت
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs md:text-sm font-bold text-slate-900 dark:text-white">
+                          {item.firstName || item.name}
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                      <span>المستوى: {item.grade}</span>
-                      <span>·</span>
-                      <span>الشارة: {item.badge}</span>
-                      <span>·</span>
-                      <span>الاختبارات المنجزة: {item.testsCompleted}</span>
+                        {isMe && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-bold">
+                            أنت
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                        <span>المستوى: {item.grade}</span>
+                        <span>·</span>
+                        <span>الشارة: {item.badge}</span>
+                        <span>·</span>
+                        <span>الاختبارات المنجزة: {item.testsCompleted}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="text-left font-mono">
-                  <span className="text-sm md:text-base font-extrabold text-amber-600 dark:text-amber-400">
-                    {item.points}
-                  </span>
-                  <span className="text-xs text-slate-400 mr-1">نقطة</span>
+                  <div className="text-left font-mono">
+                    <span className="text-sm md:text-base font-extrabold text-amber-600 dark:text-amber-400">
+                      {item.points}
+                    </span>
+                    <span className="text-xs text-slate-400 mr-1">نقطة</span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
     </div>

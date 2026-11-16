@@ -1,5 +1,6 @@
 import React from 'react';
 import { Moon, Sun } from 'lucide-react';
+import { PlatformLogo } from './PlatformLogo';
 
 export type ActiveNavTab = 
   | 'curriculum' 
@@ -37,12 +38,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-6 px-4 sm:px-6 py-3">
-        {/* Zone 1: Brand Wordmark (Single text element, 1 line) */}
+        {/* Zone 1: Brand Logo & Wordmark */}
         <button
           onClick={() => onSelectTab('curriculum')}
-          className="text-base md:text-lg font-black tracking-tight text-emerald-700 dark:text-emerald-400 whitespace-nowrap shrink-0 hover:opacity-90 transition-opacity cursor-pointer"
+          className="flex items-center gap-2.5 text-base md:text-lg font-black tracking-tight text-emerald-700 dark:text-emerald-400 whitespace-nowrap shrink-0 hover:opacity-90 transition-opacity cursor-pointer"
         >
-          علوم الطبيعة والحياة
+          <PlatformLogo className="w-10 h-9" />
+          <span>علوم الطبيعة والحياة</span>
         </button>
 
         {/* Zone 2: Clean single-line text links */}

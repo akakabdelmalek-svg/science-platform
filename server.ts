@@ -253,6 +253,14 @@ async function startServer() {
         process.exit(1);
       }
     });
+
+    const shutdown = () => {
+      server.close(() => {
+        process.exit(0);
+      });
+    };
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
   } catch (err) {
     console.error('Failed to start dev server:', err);
     process.exit(1);

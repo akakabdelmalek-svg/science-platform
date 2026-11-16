@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "StudentRanking": {
+      "title": "StudentRanking",
+      "description": "Public first-name-only leaderboard entry for a student's classment score and progress.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the student owner",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "Student first name only for classment display",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name matching firstName",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "grade": {
+          "type": "string",
+          "description": "Middle school grade level",
+          "enum": ["1AM", "2AM", "3AM", "4AM"]
+        },
+        "points": {
+          "type": "number",
+          "description": "Total leaderboard points earned by the student"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Selected emoji avatar",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "badge": {
+          "type": "string",
+          "description": "Earned achievement badge label",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "testsCompleted": {
+          "type": "number",
+          "description": "Number of completed diagnostic tests"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of initial registration"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest score update"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "firstName",
+        "name",
+        "grade",
+        "points",
+        "avatar",
+        "badge",
+        "testsCompleted",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized teacher administrator document keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["teacher"]
+        }
+      },
+      "required": ["uid", "role"]
+    }
+  },
+  "firestore": {
+    "/rankings/{rankingId}": {
+      "schema": { "$ref": "#/entities/StudentRanking" },
+      "description": "Leaderboard classment entries per student UID (first name only, grade, points, badge)."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Teacher administrator lookup table."
+    }
+  }
+}

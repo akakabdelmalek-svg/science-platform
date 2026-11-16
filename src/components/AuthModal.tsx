@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types/user';
 import { GradeLevel } from '../types/science';
-import { School, GraduationCap, User, Sparkles, KeyRound } from 'lucide-react';
+import { GraduationCap, User, Sparkles, KeyRound, Cloud } from 'lucide-react';
+import { PlatformLogo } from './PlatformLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -9,6 +10,8 @@ interface AuthModalProps {
   onSaveProfile: (profile: UserProfile) => void;
   currentProfile?: UserProfile | null;
   isObligated?: boolean;
+  firebaseUser?: { uid: string; email?: string | null; displayName?: string | null } | null;
+  onGoogleSignIn?: () => Promise<any> | void;
 }
 
 const AVATARS = ['👨‍🎓', '👩‍🎓', '👦', '👧', '👨‍🏫', '👩‍🏫', '🧬', '🔬', '🌱', '🌍'];
@@ -19,6 +22,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSaveProfile,
   currentProfile,
   isObligated = true,
+  firebaseUser,
+  onGoogleSignIn,
 }) => {
   const [firstName, setFirstName] = useState<string>(currentProfile?.firstName || currentProfile?.name || '');
   const [role, setRole] = useState<'student' | 'teacher'>(currentProfile?.role || 'student');
@@ -26,6 +31,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [avatar, setAvatar] = useState<string>(currentProfile?.avatar || '👨‍🎓');
   const [teacherPasscode, setTeacherPasscode] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
+
+  const handleGoogleFill = async () => {
+    if (!onGoogleSignIn) return;
+    setIsConnectingGoogle(true);
+    setErrorMsg(null);
+    try {
+      const fbUser = await onGoogleSignIn();
+      if (fbUser?.displayName && !firstName.trim()) {
+        const extractedFirst = String(fbUser.displayName).trim().split(/\s+/)[0];
+        if (extractedFirst) setFirstName(extractedFirst);
+      }
+    } finally {
+      setIsConnectingGoogle(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -68,9 +89,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full border border-slate-200 dark:border-slate-800 p-6 md:p-8 shadow-2xl space-y-5 animate-fade-in text-right">
         <div className="text-center space-y-1.5">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-2 shadow-inner">
-            <School className="w-7 h-7" />
-          </div>
+          <PlatformLogo className="w-20 h-16 mx-auto mb-2 rounded-2xl p-1.5 shadow-md" />
           <h3 className="text-xl font-black text-slate-900 dark:text-white">
             {currentProfile ? 'تعديل بيانات الحساب' : 'إنشاء حسابك للدخول إلى المنصة'}
           </h3>
@@ -78,6 +97,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             التسجيل إلزامي للمتابعة والمشاركة في الترتيب والمختبر والتواصل مع الأستاذ.
           </p>
         </div>
+
+        {onGoogleSignIn && (
+          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+              {firebaseUser
+                ? `متصل بـ Firebase (${firebaseUser.email || 'Google'})`
+                : 'ربط حساب Google لمزامنة نقاطك في الترتيب السحابي'}
+            </span>
+            {!firebaseUser && (
+              <button
+                type="button"
+                onClick={handleGoogleFill}
+                disabled={isConnectingGoogle}
+                className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>{isConnectingGoogle ? 'جارٍ الربط...' : 'ربط Google'}</span>
+              </button>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* First name only input */}
