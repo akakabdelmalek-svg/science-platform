@@ -15,9 +15,14 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio runtime to prevent port 24678 WebSocket collisions and iframe errors.
-      hmr: false,
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Disable HMR and Vite WebSocket server to prevent port 24678 binding/collisions
+      hmr: false as const,
+      ws: false as const,
+      allowedHosts: true as const,
+      watch:
+        process.env.DISABLE_HMR === 'true'
+          ? null
+          : { ignored: ['**/dist/**', '**/node_modules/**', '**/.git/**', '**/*.tar.gz'] },
     },
   };
 });

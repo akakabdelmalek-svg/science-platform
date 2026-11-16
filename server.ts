@@ -7,9 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-// The dev server must always run on port 3000 behind the Nginx proxy (which listens on 8080)
-const PORT = 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+// In AI Studio dev/preview nginx proxies port 8080 -> 3000 (DEFAULT_APP_PORT=3000).
+const PORT = isProduction
+  ? Number(process.env.DEFAULT_APP_PORT || process.env.PORT || 3000)
+  : 3000;
 
 app.use(express.json({ limit: '50mb' }));
 
@@ -220,30 +222,45 @@ app.post('/api/messages/:id/reply', (req: Request, res: Response) => {
   res.json({ success: true, message: msg });
 });
 
+// Guard unmatched API routes from returning HTML
+app.use('/api', (_req: Request, res: Response) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
 // =================== SERVE FRONTEND ===================
 
 async function startServer() {
+  let viteServer: { close: () => Promise<void> } | null = null;
+
   try {
-    if (!isProduction) {
+    const distPath = path.resolve(__dirname, 'dist');
+    const hasDistBuild = fs.existsSync(path.join(distPath, 'index.html'));
+
+    if (!isProduction || !hasDistBuild) {
       const { createServer: createViteServer } = await import('vite');
       const vite = await createViteServer({
         server: {
           middlewareMode: true,
           hmr: false,
-          watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
+          ws: false,
+          allowedHosts: true,
+          watch:
+            process.env.DISABLE_HMR === 'true'
+              ? null
+              : { ignored: ['**/dist/**', '**/node_modules/**', '**/.git/**', '**/*.tar.gz'] },
         },
         appType: 'spa',
       });
+      viteServer = vite;
       app.use(vite.middlewares);
     } else {
-      const distPath = path.resolve(__dirname, 'dist');
       app.use(express.static(distPath));
       app.get('*', (_req: Request, res: Response) => {
         res.sendFile(path.resolve(distPath, 'index.html'));
       });
     }
 
-    const server = app.listen(Number(PORT), '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running at http://localhost:${PORT}`);
     });
 
@@ -254,15 +271,34 @@ async function startServer() {
       }
     });
 
-    const shutdown = () => {
-      server.close(() => {
+    let shuttingDown = false;
+    const shutdown = async () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      const forceTimer = setTimeout(() => process.exit(0), 500);
+      try {
+        if (viteServer) {
+          await viteServer.close();
+        }
+      } catch {}
+      try {
+        if (typeof server.closeAllConnections === 'function') {
+          server.closeAllConnections();
+        }
+        server.close(() => {
+          clearTimeout(forceTimer);
+          process.exit(0);
+        });
+      } catch {
+        clearTimeout(forceTimer);
         process.exit(0);
-      });
+      }
     };
+
     process.on('SIGTERM', shutdown);
     process.on('SIGINT', shutdown);
   } catch (err) {
-    console.error('Failed to start dev server:', err);
+    console.error('Failed to start server:', err);
     process.exit(1);
   }
 }
