@@ -25,9 +25,11 @@ import { saveLessonFile, getLessonFile, deleteLessonFile } from './utils/fileSto
 import {
   auth,
   signInWithGoogle,
+  resolveGoogleRedirectResult,
   signOutFirebase,
   upsertStudentRankingInFirestore,
   subscribeToClassmentRankings,
+  formatFirebaseErrorMessage,
 } from './firebase';
 
 async function fetchJsonSafe(url: string): Promise<any[] | null> {
@@ -194,8 +196,9 @@ export default function App() {
     setActiveTab('assessments');
   };
 
-  // Listen to Firebase Auth state
+  // Listen to Firebase Auth state (+ resolve redirect sign-in if triggered on Vercel/mobile)
   useEffect(() => {
+    resolveGoogleRedirectResult().catch(() => {});
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       setIsFirebaseReady(true);
@@ -228,11 +231,7 @@ export default function App() {
         });
       },
       (err) => {
-        if (err.message.includes('Quota exceeded')) {
-          setFirebaseSyncError('تم تجاوز الحصة اليومية لـ Firebase، سيتم استعادة المزامنة غداً.');
-        } else {
-          setFirebaseSyncError('تعذرت مزامنة الترتيب عبر Firebase، تحقق من الاتصال أو الصلاحيات.');
-        }
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
       }
     );
 
@@ -251,16 +250,18 @@ export default function App() {
       avatar: currentUser.avatar,
       badge: 'تلميذ مجتهد ⭐',
       testsCompleted: currentUser.testsCompleted,
-    }).catch((err) => {
-      console.warn('Firebase classment sync:', err);
-    });
+    })
+      .then(() => setFirebaseSyncError(null))
+      .catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
   }, [isFirebaseReady, firebaseUser, currentUser?.points, currentUser?.testsCompleted, currentUser?.firstName, currentUser?.grade, currentUser?.avatar]);
 
   const handleGoogleSignIn = async (): Promise<FirebaseUser | null> => {
     try {
       setFirebaseSyncError(null);
       const user = await signInWithGoogle();
-      if (currentUser && currentUser.role === 'student') {
+      if (user && currentUser && currentUser.role === 'student') {
         await upsertStudentRankingInFirestore({
           firstName: currentUser.firstName || currentUser.name || 'تلميذ',
           grade: currentUser.grade || '4AM',
@@ -272,7 +273,7 @@ export default function App() {
       }
       return user;
     } catch (err) {
-      setFirebaseSyncError('تعذر تسجيل الدخول عبر Google. تأكد من السماح بالنوافذ المنبثقة.');
+      setFirebaseSyncError(formatFirebaseErrorMessage(err));
       return null;
     }
   };
@@ -515,9 +516,11 @@ export default function App() {
           avatar: profile.avatar,
           badge: 'تلميذ مجتهد ⭐',
           testsCompleted: profile.testsCompleted,
-        }).catch((err) => {
-          console.warn('Firestore ranking save failed:', err);
-        });
+        })
+          .then(() => setFirebaseSyncError(null))
+          .catch((err) => {
+            setFirebaseSyncError(formatFirebaseErrorMessage(err));
+          });
       }
 
       fetch('/api/rankings', {
@@ -672,6 +675,7 @@ export default function App() {
         onSaveProfile={handleSaveProfile}
         currentProfile={currentUser}
         firebaseUser={firebaseUser}
+        firebaseSyncError={firebaseSyncError}
         onGoogleSignIn={handleGoogleSignIn}
       />
 

@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   User as FirebaseUser,
 } from 'firebase/auth';
@@ -30,6 +32,7 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export enum OperationType {
   CREATE = 'create',
@@ -95,9 +98,53 @@ async function testConnection() {
 }
 testConnection();
 
-export async function signInWithGoogle(): Promise<FirebaseUser> {
-  const result = await signInWithPopup(auth, googleProvider);
-  return result.user;
+export function formatFirebaseErrorMessage(err: unknown): string {
+  const code = (err as { code?: string })?.code || '';
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain')) {
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    return `النطاق غير مصرح به في Firebase Auth (${host}). أضفه في Authorized domains ثم أعد المحاولة.`;
+  }
+  if (code === 'auth/popup-blocked' || msg.includes('popup-blocked')) {
+    return 'تم حظر النافذة المنبثقة من المتصفح. يرجى السماح بالنوافذ المنبثقة (Pop-ups) لهذا الموقع.';
+  }
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return 'تم إغلاق نافذة تسجيل الدخول قبل إتمام الربط.';
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return 'تسجيل الدخول عبر Google غير مفعل في مشروع Firebase.';
+  }
+  if (msg.includes('Quota exceeded')) {
+    return 'تم تجاوز الحصة اليومية لـ Firebase، سيتم استعادة المزامنة غداً.';
+  }
+  if (msg.includes('Missing or insufficient permissions') || msg.includes('permission-denied')) {
+    return 'صلاحيات Firestore مرفوضة للعملية الحالية. تأكد من تسجيل الدخول بحساب Google موثق.';
+  }
+  return `خطأ Firebase${code ? ` (${code})` : ''}: ${msg}`;
+}
+
+export async function resolveGoogleRedirectResult(): Promise<FirebaseUser | null> {
+  try {
+    const res = await getRedirectResult(auth);
+    return res?.user || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function signInWithGoogle(): Promise<FirebaseUser | null> {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
+  } catch (err: any) {
+    const isStandaloneTopWindow = typeof window !== 'undefined' && window.self === window.top;
+    if (err?.code === 'auth/popup-blocked' && isStandaloneTopWindow) {
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function signOutFirebase(): Promise<void> {

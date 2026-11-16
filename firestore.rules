@@ -89,8 +89,8 @@ service cloud.firestore {
 
     // Student Classment Leaderboard Collection (first name, grade, points, badge - zero PII)
     match /rankings/{rankingId} {
-      allow get: if isSignedIn() && isValidId(rankingId) && existing().points is number;
-      allow list: if isSignedIn() && existing().points is number && existing().points >= 0;
+      allow get: if isSignedIn() && isValidId(rankingId) && (rankingId == request.auth.uid || (resource != null && existing().points is number));
+      allow list: if isSignedIn() && existing().points >= 0;
 
       allow create: if isEmailVerified()
         && isValidId(rankingId)
