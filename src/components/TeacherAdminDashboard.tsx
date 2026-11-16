@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldCheck, Lock, Plus, Trash2, Edit3, CheckCircle2, 
   BookOpen, Video, HelpCircle, User, MessageCircle, 
@@ -99,6 +99,8 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   const [lessonKeyConcept, setLessonKeyConcept] = useState<string>('');
   const [lessonAttachment, setLessonAttachment] = useState<LessonAttachment | null>(null);
   const [lessonFileError, setLessonFileError] = useState<string | null>(null);
+  const [isReadingLessonFile, setIsReadingLessonFile] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // New Applied Exercise Form
   const [exTitle, setExTitle] = useState<string>('');
@@ -158,24 +160,28 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
     }
   };
 
-  // Handle importing Word / Excel / PowerPoint / PDF lesson file
-  const handleLessonFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Process imported Word / Excel / PowerPoint / PDF file
+  const processLessonFile = (file: File) => {
     setLessonFileError(null);
-    const maxBytes = 15 * 1024 * 1024;
+    const maxBytes = 25 * 1024 * 1024;
     if (file.size > maxBytes) {
-      setLessonFileError('حجم الملف يتجاوز 15 ميغابايت. يرجى اختيار ملف أصغر حجماً.');
+      setLessonFileError('حجم الملف يتجاوز 25 ميغابايت. يرجى اختيار ملف أصغر حجماً.');
       return;
     }
 
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const mime = (file.type || '').toLowerCase();
     let fileType: LessonAttachment['fileType'] = 'other';
-    if (ext === 'docx' || ext === 'doc') fileType = 'docx';
-    else if (ext === 'xlsx' || ext === 'xls') fileType = 'xlsx';
-    else if (ext === 'pptx' || ext === 'ppt') fileType = 'pptx';
-    else if (ext === 'pdf') fileType = 'pdf';
+
+    if (ext === 'docx' || ext === 'doc' || mime.includes('wordprocessingml') || mime === 'application/msword') {
+      fileType = 'docx';
+    } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv' || mime.includes('spreadsheetml') || mime.includes('ms-excel')) {
+      fileType = 'xlsx';
+    } else if (ext === 'pptx' || ext === 'ppt' || ext === 'ppsx' || mime.includes('presentationml') || mime.includes('ms-powerpoint')) {
+      fileType = 'pptx';
+    } else if (ext === 'pdf' || mime === 'application/pdf') {
+      fileType = 'pdf';
+    }
 
     if (fileType === 'other') {
       setLessonFileError('يرجى استيراد ملف بصيغة Word (.docx/.doc) أو Excel (.xlsx/.xls) أو PowerPoint (.pptx/.ppt) أو PDF.');
@@ -187,8 +193,10 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
         ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
         : `${Math.max(1, Math.round(file.size / 1024))} KB`;
 
+    setIsReadingLessonFile(true);
     const reader = new FileReader();
     reader.onload = () => {
+      setIsReadingLessonFile(false);
       const dataUrl = typeof reader.result === 'string' ? reader.result : '';
       if (!dataUrl) {
         setLessonFileError('تعذّر قراءة الملف المحدد. يرجى المحاولة مرة أخرى.');
@@ -207,9 +215,26 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
       }
     };
     reader.onerror = () => {
+      setIsReadingLessonFile(false);
       setLessonFileError('حدث خطأ أثناء قراءة الملف.');
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleLessonFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processLessonFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleLessonFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processLessonFile(file);
+    }
   };
 
   // Add Lesson Submit
@@ -1242,7 +1267,18 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                   استيراد ملف الدرس (Word / Excel / PowerPoint / PDF):
                 </label>
-                <div className="rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 p-3.5 text-center space-y-2">
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleLessonFileDrop}
+                  className="rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 p-3.5 text-center space-y-2"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.ppsx,.pdf"
+                    onChange={handleLessonFileImport}
+                    className="sr-only"
+                  />
                   {lessonAttachment ? (
                     <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800 text-right">
                       <div className="flex items-center gap-2 min-w-0">
@@ -1277,21 +1313,21 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <label className="cursor-pointer flex flex-col items-center gap-1.5 py-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full cursor-pointer flex flex-col items-center gap-1.5 py-2 hover:bg-slate-100/70 dark:hover:bg-slate-800/80 rounded-lg transition-colors"
+                    >
                       <Upload className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        اضغط لاستيراد ملف الدرس (.docx / .xlsx / .pptx / .pdf)
+                        {isReadingLessonFile
+                          ? 'جارٍ قراءة وتجهيز الملف...'
+                          : 'اضغط هنا أو اسحب ملف الدرس (.docx / .xlsx / .pptx / .pdf)'}
                       </span>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                        يدعم مستندات Word وجداول Excel وعروض PowerPoint حتى 15 MB
+                        يدعم مستندات Word وجداول Excel وعروض PowerPoint حتى 25 MB
                       </span>
-                      <input
-                        type="file"
-                        accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/pdf"
-                        onChange={handleLessonFileImport}
-                        className="hidden"
-                      />
-                    </label>
+                    </button>
                   )}
                   {lessonFileError && (
                     <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
@@ -1338,9 +1374,10 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg cursor-pointer"
+                  disabled={isReadingLessonFile}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg cursor-pointer"
                 >
-                  نشر الدرس في المنهاج
+                  {isReadingLessonFile ? 'جارٍ تحميل الملف...' : 'نشر الدرس في المنهاج'}
                 </button>
               </div>
             </form>

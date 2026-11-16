@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { GradeLevel, LessonUnit, LessonAttachment, TeacherExercise } from '../types/science';
 import { GRADES_DATA, LESSONS_DATA } from '../data/curriculumData';
+import { getLessonFile, triggerDataUrlDownload } from '../utils/fileStorage';
 
 interface CurriculumBrowserProps {
   onOpenLab?: (labType: string) => void;
@@ -79,15 +80,14 @@ export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
     }
   };
 
-  const handleDownloadAttachment = (attachment: LessonAttachment, e?: React.MouseEvent) => {
+  const handleDownloadAttachment = async (lessonId: string, attachment: LessonAttachment, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!attachment.dataUrl) return;
-    const a = document.createElement('a');
-    a.href = attachment.dataUrl;
-    a.download = attachment.fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    let dataUrl = attachment.dataUrl;
+    if (!dataUrl) {
+      dataUrl = (await getLessonFile(lessonId)) || '';
+    }
+    if (!dataUrl) return;
+    triggerDataUrlDownload(dataUrl, attachment.fileName, attachment.mimeType);
   };
 
   const lessonRelatedExercises = selectedLesson
@@ -278,9 +278,8 @@ export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
                       </div>
 
                       <button
-                        onClick={() => handleDownloadAttachment(selectedLesson.attachment!)}
-                        disabled={!selectedLesson.attachment.dataUrl}
-                        className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shrink-0 shadow-sm"
+                        onClick={() => handleDownloadAttachment(selectedLesson.id, selectedLesson.attachment!)}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shrink-0 shadow-sm"
                       >
                         <Download className="w-4 h-4" />
                         <span>تحميل ملف الدرس</span>
@@ -522,16 +521,14 @@ export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
                             {lesson.attachment.fileName}
                           </span>
                         </div>
-                        {lesson.attachment.dataUrl && (
-                          <button
-                            onClick={(e) => handleDownloadAttachment(lesson.attachment!, e)}
-                            className="flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg shrink-0 cursor-pointer"
-                            title="تحميل ملف الدرس"
-                          >
-                            <Download className="w-3 h-3" />
-                            <span>تحميل</span>
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => handleDownloadAttachment(lesson.id, lesson.attachment!, e)}
+                          className="flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg shrink-0 cursor-pointer"
+                          title="تحميل ملف الدرس"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>تحميل</span>
+                        </button>
                       </div>
                     );
                   })()}

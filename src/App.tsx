@@ -20,6 +20,20 @@ import { INITIAL_RANKINGS, INITIAL_DIRECT_MESSAGES } from './data/rankingsData';
 import { LessonUnit, GradeLevel, TeacherExercise } from './types/science';
 import { AssessmentTest, AssessmentQuestion } from './types/assessment';
 import { UserProfile, StudentRanking, DirectTeacherMessage } from './types/user';
+import { saveLessonFile, getLessonFile, deleteLessonFile } from './utils/fileStorage';
+
+async function fetchJsonSafe(url: string): Promise<any[] | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
 
 function safeJsonParse<T>(key: string, fallback: T): T {
   try {
@@ -167,92 +181,111 @@ export default function App() {
     setActiveTab('assessments');
   };
 
-  // Sync with Server on mount
+  // Sync with IndexedDB & optional Server on mount
   useEffect(() => {
-    fetch('/api/lessons')
-      .then((res) => res.json())
-      .then((serverLessons) => {
-        if (Array.isArray(serverLessons) && serverLessons.length > 0) {
-          setLessons((prev) => {
-            const merged = [...serverLessons];
-            prev.forEach((p) => {
-              if (!merged.some((m) => m.id === p.id)) {
-                merged.push(p);
-              }
-            });
-            return merged;
-          });
-        }
-      })
-      .catch((err) => console.warn('Server lessons sync:', err));
+    let active = true;
 
-    fetch('/api/exercises')
-      .then((res) => res.json())
-      .then((serverExercises) => {
-        if (Array.isArray(serverExercises) && serverExercises.length > 0) {
-          setExercises((prev) => {
-            const merged = [...serverExercises];
-            prev.forEach((p) => {
-              if (!merged.some((m) => m.id === p.id)) {
-                merged.push(p);
-              }
-            });
-            return merged;
-          });
-        }
-      })
-      .catch((err) => console.warn('Server exercises sync:', err));
+    // 1. Hydrate any attachment dataUrls from IndexedDB (critical for static Vercel hosting)
+    const hydrateFromIndexedDb = async () => {
+      const hydrated = await Promise.all(
+        lessons.map(async (l) => {
+          if (l.attachment && !l.attachment.dataUrl) {
+            const storedDataUrl = await getLessonFile(l.id);
+            if (storedDataUrl) {
+              return { ...l, attachment: { ...l.attachment, dataUrl: storedDataUrl } };
+            }
+          }
+          return l;
+        })
+      );
+      if (active) {
+        const changed = hydrated.some((l, i) => l !== lessons[i]);
+        if (changed) setLessons(hydrated);
+      }
+    };
+    hydrateFromIndexedDb();
 
-    fetch('/api/videos')
-      .then((res) => res.json())
-      .then((serverVideos) => {
-        if (Array.isArray(serverVideos) && serverVideos.length > 0) {
-          setVideos((prev) => {
-            const merged = [...serverVideos];
-            prev.forEach((p) => {
-              if (!merged.some((m) => m.id === p.id)) {
-                merged.push(p);
-              }
-            });
-            return merged;
+    // 2. Sync with backend if running full-stack server.ts
+    fetchJsonSafe('/api/lessons').then((serverLessons) => {
+      if (active && serverLessons && serverLessons.length > 0) {
+        setLessons((prev) => {
+          const merged = [...serverLessons];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) {
+              merged.push(p);
+            }
           });
-        }
-      })
-      .catch((err) => console.warn('Server videos sync:', err));
+          return merged;
+        });
+      }
+    });
 
-    fetch('/api/rankings')
-      .then((res) => res.json())
-      .then((serverRankings) => {
-        if (Array.isArray(serverRankings) && serverRankings.length > 0) {
-          setRankings((prev) => {
-            const merged = [...serverRankings];
-            prev.forEach((p) => {
-              if (!merged.some((m) => m.id === p.id)) {
-                merged.push(p);
-              }
-            });
-            return merged;
+    fetchJsonSafe('/api/exercises').then((serverExercises) => {
+      if (active && serverExercises && serverExercises.length > 0) {
+        setExercises((prev) => {
+          const merged = [...serverExercises];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) {
+              merged.push(p);
+            }
           });
-        }
-      })
-      .catch((err) => console.warn('Server rankings sync:', err));
+          return merged;
+        });
+      }
+    });
+
+    fetchJsonSafe('/api/videos').then((serverVideos) => {
+      if (active && serverVideos && serverVideos.length > 0) {
+        setVideos((prev) => {
+          const merged = [...serverVideos];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) {
+              merged.push(p);
+            }
+          });
+          return merged;
+        });
+      }
+    });
+
+    fetchJsonSafe('/api/rankings').then((serverRankings) => {
+      if (active && serverRankings && serverRankings.length > 0) {
+        setRankings((prev) => {
+          const merged = [...serverRankings];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) {
+              merged.push(p);
+            }
+          });
+          return merged;
+        });
+      }
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Lesson Management (Teacher Admin)
   const handleAddLesson = (newLesson: LessonUnit) => {
     setLessons((prev) => [newLesson, ...prev]);
+    if (newLesson.attachment?.dataUrl) {
+      saveLessonFile(newLesson.id, newLesson.attachment.dataUrl);
+    }
     fetch('/api/lessons', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newLesson),
-    }).catch((err) => console.error('Failed to sync lesson to server:', err));
+    }).catch(() => {});
   };
 
   const handleDeleteLesson = (lessonId: string) => {
     setLessons((prev) => prev.filter((l) => l.id !== lessonId));
+    deleteLessonFile(lessonId);
     fetch(`/api/lessons/${lessonId}`, {
       method: 'DELETE',
-    }).catch((err) => console.error('Failed to delete lesson on server:', err));
+    }).catch(() => {});
   };
 
   // Applied Exercise Management (Teacher Admin)
