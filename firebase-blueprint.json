@@ -73,6 +73,157 @@
         "updatedAt"
       ]
     },
+    "LessonItem": {
+      "title": "LessonItem",
+      "description": "Curriculum lesson unit published by a teacher for students across all middle school levels.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "grade": { "type": "string", "enum": ["1AM", "2AM", "3AM", "4AM"] },
+        "domain": { "type": "string", "enum": ["human_health", "plant_ecosystems", "earth_geology", "neuro_immunity", "methodology"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 300 },
+        "durationMinutes": { "type": "number" },
+        "summary": { "type": "string", "maxLength": 5000 },
+        "keyConcepts": { "type": "array" },
+        "scientificTerms": { "type": "array" },
+        "steps": { "type": "array" },
+        "practicalExperiment": { "type": "string", "maxLength": 2000 },
+        "bemExamTips": { "type": "string", "maxLength": 2000 },
+        "attachment": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "grade", "domain", "title", "subtitle", "durationMinutes", "summary", "keyConcepts", "scientificTerms", "steps", "createdAt", "updatedAt"]
+    },
+    "TeacherExerciseItem": {
+      "title": "TeacherExerciseItem",
+      "description": "Applied science exercise created by the teacher.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "grade": { "type": "string", "enum": ["1AM", "2AM", "3AM", "4AM"] },
+        "domain": { "type": "string", "enum": ["human_health", "plant_ecosystems", "earth_geology", "neuro_immunity", "methodology"] },
+        "lessonId": { "type": "string", "maxLength": 128 },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "statement": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "instructions": { "type": "string", "maxLength": 3000 },
+        "solution": { "type": "string", "maxLength": 5000 },
+        "createdAtLabel": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "title", "grade", "domain", "difficulty", "statement", "instructions", "solution", "createdAtLabel", "createdAt", "updatedAt"]
+    },
+    "VideoLessonItem": {
+      "title": "VideoLessonItem",
+      "description": "Interactive video lesson published for students.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 300 },
+        "grade": { "type": "string", "enum": ["1AM", "2AM", "3AM", "4AM"] },
+        "domain": { "type": "string", "enum": ["human_health", "plant_ecosystems", "earth_geology", "neuro_immunity", "methodology"] },
+        "durationSeconds": { "type": "number" },
+        "thumbnail": { "type": "string", "maxLength": 500 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "learningOutcomes": { "type": "array" },
+        "keyConcept": { "type": "string", "maxLength": 500 },
+        "checkpoints": { "type": "array" },
+        "scenes": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "title", "subtitle", "grade", "domain", "durationSeconds", "thumbnail", "description", "learningOutcomes", "keyConcept", "checkpoints", "scenes", "createdAt", "updatedAt"]
+    },
+    "AssessmentTestItem": {
+      "title": "AssessmentTestItem",
+      "description": "Diagnostic assessment test with custom questions managed by the teacher.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 300 },
+        "grade": { "type": "string", "enum": ["1AM", "2AM", "3AM", "4AM"] },
+        "trimester": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "questions": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "title", "subtitle", "grade", "trimester", "durationMinutes", "totalScore", "questions", "createdAt", "updatedAt"]
+    },
+    "EducationalResourceItem": {
+      "title": "EducationalResourceItem",
+      "description": "Shared educational resource metadata (Word, Excel, PowerPoint, PDF).",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "format": { "type": "string", "enum": ["pptx", "docx", "xlsx", "pdf"] },
+        "fileCategory": { "type": "string", "enum": ["lesson_ppt", "summary_word", "calculation_excel", "exam_pdf"] },
+        "grade": { "type": "string", "enum": ["1AM", "2AM", "3AM", "4AM"] },
+        "trimester": { "type": "number" },
+        "author": { "type": "string", "maxLength": 80 },
+        "authorRole": { "type": "string", "maxLength": 100 },
+        "fileSize": { "type": "string", "maxLength": 40 },
+        "downloadsCount": { "type": "number" },
+        "uploadedDate": { "type": "string", "maxLength": 40 },
+        "previewPoints": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "title", "description", "format", "fileCategory", "grade", "trimester", "author", "authorRole", "fileSize", "downloadsCount", "uploadedDate", "previewPoints", "createdAt", "updatedAt"]
+    },
+    "ForumTopicItem": {
+      "title": "ForumTopicItem",
+      "description": "Science discussion topic and community replies in the platform forum.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "grade": { "type": "string", "enum": ["1AM", "2AM", "3AM", "4AM", "all"] },
+        "domain": { "type": "string", "maxLength": 60 },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "authorRole": { "type": "string", "enum": ["student", "teacher", "moderator"] },
+        "content": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "createdAtLabel": { "type": "string", "maxLength": 60 },
+        "views": { "type": "number" },
+        "upvotes": { "type": "number" },
+        "isReported": { "type": "boolean" },
+        "attachments": { "type": "array" },
+        "replies": { "type": "array" },
+        "tags": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "title", "grade", "domain", "authorName", "authorRole", "content", "createdAtLabel", "views", "upvotes", "isReported", "attachments", "replies", "tags", "createdAt", "updatedAt"]
+    },
+    "DirectTeacherMessageItem": {
+      "title": "DirectTeacherMessageItem",
+      "description": "Private student question sent directly to the supervising science teacher.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "studentGrade": { "type": "string", "enum": ["1AM", "2AM", "3AM", "4AM"] },
+        "topic": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "questionText": { "type": "string", "minLength": 1, "maxLength": 3000 },
+        "status": { "type": "string", "enum": ["pending", "answered"] },
+        "replyText": { "type": "string", "maxLength": 3000 },
+        "teacherName": { "type": "string", "maxLength": 80 },
+        "createdAtLabel": { "type": "string", "maxLength": 60 },
+        "answeredAtLabel": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "studentId", "studentName", "studentGrade", "topic", "questionText", "status", "createdAtLabel", "createdAt", "updatedAt"]
+    },
     "AdminUser": {
       "title": "AdminUser",
       "description": "Authorized teacher administrator document keyed by Firebase Auth UID.",
@@ -96,6 +247,34 @@
     "/rankings/{rankingId}": {
       "schema": { "$ref": "#/entities/StudentRanking" },
       "description": "Leaderboard classment entries per student UID (first name only, grade, points, badge)."
+    },
+    "/lessons/{lessonId}": {
+      "schema": { "$ref": "#/entities/LessonItem" },
+      "description": "Teacher-published curriculum lessons and attachment metadata."
+    },
+    "/exercises/{exerciseId}": {
+      "schema": { "$ref": "#/entities/TeacherExerciseItem" },
+      "description": "Teacher-published applied science exercises."
+    },
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/VideoLessonItem" },
+      "description": "Teacher-published interactive video lessons."
+    },
+    "/custom_tests/{testId}": {
+      "schema": { "$ref": "#/entities/AssessmentTestItem" },
+      "description": "Teacher-managed assessment tests and custom questions."
+    },
+    "/resources/{resourceId}": {
+      "schema": { "$ref": "#/entities/EducationalResourceItem" },
+      "description": "Shared educational Word, Excel, PowerPoint, and PDF resource entries."
+    },
+    "/forum_topics/{topicId}": {
+      "schema": { "$ref": "#/entities/ForumTopicItem" },
+      "description": "Community forum topics and student/teacher replies."
+    },
+    "/direct_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DirectTeacherMessageItem" },
+      "description": "Direct student questions and supervising teacher answers."
     },
     "/admins/{adminUid}": {
       "schema": { "$ref": "#/entities/AdminUser" },

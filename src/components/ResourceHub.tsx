@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, Upload, Download, Search, Filter, CheckCircle2, 
   Sparkles, FileSpreadsheet, Presentation, FileCode, Clock, User, X, Trash2
@@ -6,8 +6,18 @@ import {
 import { EducationalResource, FileCategory } from '../types/resources';
 import { INITIAL_RESOURCES } from '../data/resourcesData';
 import { GradeLevel } from '../types/science';
+import {
+  saveResourceInFirestore,
+  incrementResourceDownloadInFirestore,
+  deleteResourceInFirestore,
+  subscribeToResources,
+} from '../firebaseWebData';
 
-export const ResourceHub: React.FC = () => {
+interface ResourceHubProps {
+  firebaseUser?: { uid: string; email?: string | null } | null;
+}
+
+export const ResourceHub: React.FC<ResourceHubProps> = ({ firebaseUser }) => {
   const [resources, setResources] = useState<EducationalResource[]>(() => {
     try {
       const saved = localStorage.getItem('science_platform_resources');
@@ -16,6 +26,24 @@ export const ResourceHub: React.FC = () => {
       return INITIAL_RESOURCES;
     }
   });
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+    const unsub = subscribeToResources((cloudRes) => {
+      if (cloudRes.length === 0) return;
+      setResources((prev) => {
+        const merged = [...cloudRes];
+        prev.forEach((p) => {
+          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+        });
+        try {
+          localStorage.setItem('science_platform_resources', JSON.stringify(merged));
+        } catch {}
+        return merged;
+      });
+    });
+    return () => unsub();
+  }, [firebaseUser]);
   const [selectedFormat, setSelectedFormat] = useState<string>('all');
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -56,9 +84,18 @@ export const ResourceHub: React.FC = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    // Increment downloads count locally
+    // Increment downloads count locally & in Firestore
     setResources((prev) =>
-      prev.map((r) => (r.id === res.id ? { ...r, downloadsCount: r.downloadsCount + 1 } : r))
+      prev.map((r) => {
+        if (r.id === res.id) {
+          const nextCount = r.downloadsCount + 1;
+          if (firebaseUser) {
+            incrementResourceDownloadInFirestore(res.id, nextCount).catch(() => {});
+          }
+          return { ...r, downloadsCount: nextCount };
+        }
+        return r;
+      })
     );
   };
 
@@ -91,6 +128,9 @@ export const ResourceHub: React.FC = () => {
     const updated = [created, ...resources];
     setResources(updated);
     localStorage.setItem('science_platform_resources', JSON.stringify(updated));
+    if (firebaseUser) {
+      saveResourceInFirestore(created).catch(() => {});
+    }
     setShowUploadModal(false);
     setNewTitle('');
     setNewDesc('');
@@ -103,6 +143,9 @@ export const ResourceHub: React.FC = () => {
     const updated = resources.filter((r) => r.id !== id);
     setResources(updated);
     localStorage.setItem('science_platform_resources', JSON.stringify(updated));
+    if (firebaseUser) {
+      deleteResourceInFirestore(id).catch(() => {});
+    }
     showToast(`تم حذف الملف: "${title}" بنجاح`);
   };
 

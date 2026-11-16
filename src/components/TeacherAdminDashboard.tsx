@@ -3,12 +3,13 @@ import {
   ShieldCheck, Lock, Plus, Trash2, Edit3, CheckCircle2, 
   BookOpen, Video, HelpCircle, User, MessageCircle, 
   BarChart3, Sparkles, X, Send, Eye, KeyRound, FileText, ArrowLeft,
-  Upload, Download, FileSpreadsheet, Presentation, FileCode
+  Upload, Download, FileSpreadsheet, Presentation, FileCode, Cloud
 } from 'lucide-react';
 import { LessonUnit, LessonAttachment, GradeLevel, ScienceDomain, TeacherExercise } from '../types/science';
 import { AssessmentTest, AssessmentQuestion } from '../types/assessment';
 import { VideoLesson } from '../data/videoData';
 import { DirectTeacherMessage, StudentRanking, UserProfile } from '../types/user';
+import { isTeacherCloudAdmin } from '../firebaseWebData';
 import heroBiologyThumb from '../assets/images/science_hero_biology_1794414991383.jpg';
 
 interface TeacherAdminDashboardProps {
@@ -33,6 +34,9 @@ interface TeacherAdminDashboardProps {
 
   rankings: StudentRanking[];
   currentUser?: UserProfile | null;
+  firebaseUser?: { uid: string; email?: string | null; displayName?: string | null } | null;
+  firebaseSyncError?: string | null;
+  onGoogleSignIn?: () => Promise<any> | void;
   initialSubtab?: 'lessons' | 'exercises' | 'videos' | 'questions_box' | 'student_levels';
   onNavigateToLessons?: (grade?: GradeLevel | 'all') => void;
   onNavigateToExercises?: (grade?: GradeLevel | 'all') => void;
@@ -55,6 +59,9 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   onReplyDirectMessage,
   rankings,
   currentUser,
+  firebaseUser,
+  firebaseSyncError,
+  onGoogleSignIn,
   initialSubtab = 'lessons',
   onNavigateToLessons,
   onNavigateToExercises,
@@ -497,6 +504,48 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Firebase Web Data Sync Bar */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+            isTeacherCloudAdmin(firebaseUser?.email)
+              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+              : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400'
+          }`}>
+            <Cloud className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-slate-900 dark:text-white">
+              {isTeacherCloudAdmin(firebaseUser?.email)
+                ? `قاعدة بيانات المنصة السحابية مفعلة (${firebaseUser?.email})`
+                : firebaseUser
+                ? `متصل بحساب (${firebaseUser.email || 'Google'}) — لحفظ دروس المنصة سحابياً استخدم حساب الأستاذ`
+                : 'مزامنة قاعدة بيانات الويب (الدروس، التمارين، الفيديوهات، الأسئلة) عبر Firebase'}
+            </div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              {isTeacherCloudAdmin(firebaseUser?.email)
+                ? 'جميع الدروس والتمارين والردود تُحفظ مباشرة في Firestore لجميع التلاميذ.'
+                : 'اربط حساب Google الأستاذ لمزامنة كل المحتوى والملفات على الويب دائماً.'}
+            </div>
+            {firebaseSyncError && (
+              <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold mt-1">
+                {firebaseSyncError}
+              </div>
+            )}
+          </div>
+        </div>
+        {onGoogleSignIn && !isTeacherCloudAdmin(firebaseUser?.email) && (
+          <button
+            type="button"
+            onClick={() => onGoogleSignIn()}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Cloud className="w-3.5 h-3.5" />
+            <span>ربط حساب الأستاذ السحابي</span>
+          </button>
+        )}
       </div>
 
       {/* Admin KPI Stats */}

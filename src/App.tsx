@@ -31,6 +31,22 @@ import {
   subscribeToClassmentRankings,
   formatFirebaseErrorMessage,
 } from './firebase';
+import {
+  saveLessonInFirestore,
+  deleteLessonInFirestore,
+  subscribeToLessons,
+  saveExerciseInFirestore,
+  deleteExerciseInFirestore,
+  subscribeToExercises,
+  saveVideoInFirestore,
+  deleteVideoInFirestore,
+  subscribeToVideos,
+  saveCustomTestInFirestore,
+  subscribeToCustomTests,
+  saveDirectMessageInFirestore,
+  replyDirectMessageInFirestore,
+  subscribeToDirectMessages,
+} from './firebaseWebData';
 
 async function fetchJsonSafe(url: string): Promise<any[] | null> {
   try {
@@ -238,6 +254,100 @@ export default function App() {
     return () => unsubscribe();
   }, [isFirebaseReady, firebaseUser]);
 
+  // Subscribe to Firestore Web Data collections (lessons, exercises, videos, custom_tests, direct_messages)
+  useEffect(() => {
+    if (!isFirebaseReady || !firebaseUser) return;
+
+    const unsubLessons = subscribeToLessons(
+      (cloudLessons) => {
+        if (cloudLessons.length === 0) return;
+        setLessons((prev) => {
+          const prevMap = new Map(prev.map((l) => [l.id, l]));
+          const merged = cloudLessons.map((cl) => {
+            const localMatch = prevMap.get(cl.id);
+            if (cl.attachment && !cl.attachment.dataUrl && localMatch?.attachment?.dataUrl) {
+              return {
+                ...cl,
+                attachment: { ...cl.attachment, dataUrl: localMatch.attachment.dataUrl },
+              };
+            }
+            return cl;
+          });
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          });
+          return merged;
+        });
+      },
+      (err) => setFirebaseSyncError(formatFirebaseErrorMessage(err))
+    );
+
+    const unsubExercises = subscribeToExercises(
+      (cloudEx) => {
+        if (cloudEx.length === 0) return;
+        setExercises((prev) => {
+          const merged = [...cloudEx];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          });
+          return merged;
+        });
+      },
+      (err) => setFirebaseSyncError(formatFirebaseErrorMessage(err))
+    );
+
+    const unsubVideos = subscribeToVideos(
+      (cloudVids) => {
+        if (cloudVids.length === 0) return;
+        setVideos((prev) => {
+          const merged = [...cloudVids];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          });
+          return merged;
+        });
+      },
+      (err) => setFirebaseSyncError(formatFirebaseErrorMessage(err))
+    );
+
+    const unsubTests = subscribeToCustomTests(
+      (cloudTests) => {
+        if (cloudTests.length === 0) return;
+        setTests((prev) => {
+          const cloudMap = new Map(cloudTests.map((t) => [t.id, t]));
+          const merged = prev.map((t) => cloudMap.get(t.id) || t);
+          cloudTests.forEach((ct) => {
+            if (!merged.some((m) => m.id === ct.id)) merged.unshift(ct);
+          });
+          return merged;
+        });
+      },
+      (err) => setFirebaseSyncError(formatFirebaseErrorMessage(err))
+    );
+
+    const unsubMsgs = subscribeToDirectMessages(
+      (cloudMsgs) => {
+        if (cloudMsgs.length === 0) return;
+        setDirectMessages((prev) => {
+          const merged = [...cloudMsgs];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          });
+          return merged;
+        });
+      },
+      (err) => setFirebaseSyncError(formatFirebaseErrorMessage(err))
+    );
+
+    return () => {
+      unsubLessons();
+      unsubExercises();
+      unsubVideos();
+      unsubTests();
+      unsubMsgs();
+    };
+  }, [isFirebaseReady, firebaseUser]);
+
   // Sync student points updates automatically to Firebase Firestore
   useEffect(() => {
     if (!isFirebaseReady || !firebaseUser || !currentUser || currentUser.role !== 'student') {
@@ -376,6 +486,11 @@ export default function App() {
     if (newLesson.attachment?.dataUrl) {
       saveLessonFile(newLesson.id, newLesson.attachment.dataUrl);
     }
+    if (firebaseUser) {
+      saveLessonInFirestore(newLesson).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
     fetch('/api/lessons', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -386,6 +501,11 @@ export default function App() {
   const handleDeleteLesson = (lessonId: string) => {
     setLessons((prev) => prev.filter((l) => l.id !== lessonId));
     deleteLessonFile(lessonId);
+    if (firebaseUser) {
+      deleteLessonInFirestore(lessonId).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
     fetch(`/api/lessons/${lessonId}`, {
       method: 'DELETE',
     }).catch(() => {});
@@ -394,6 +514,11 @@ export default function App() {
   // Applied Exercise Management (Teacher Admin)
   const handleAddExercise = (newExercise: TeacherExercise) => {
     setExercises((prev) => [newExercise, ...prev]);
+    if (firebaseUser) {
+      saveExerciseInFirestore(newExercise).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
     fetch('/api/exercises', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -403,6 +528,11 @@ export default function App() {
 
   const handleDeleteExercise = (exerciseId: string) => {
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
+    if (firebaseUser) {
+      deleteExerciseInFirestore(exerciseId).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
     fetch(`/api/exercises/${exerciseId}`, {
       method: 'DELETE',
     }).catch((err) => console.error('Failed to delete exercise on server:', err));
@@ -412,34 +542,63 @@ export default function App() {
   const handleAddQuestion = (testId: string, newQ: AssessmentQuestion, fallbackGrade: GradeLevel = '4AM') => {
     setTests((prev) => {
       const exists = prev.some((t) => t.id === testId);
+      let targetTest: AssessmentTest;
+      let nextTests: AssessmentTest[];
       if (exists) {
-        return prev.map((t) => (t.id === testId ? { ...t, questions: [newQ, ...t.questions] } : t));
+        nextTests = prev.map((t) => {
+          if (t.id === testId) {
+            targetTest = { ...t, questions: [newQ, ...t.questions] };
+            return targetTest;
+          }
+          return t;
+        });
+      } else {
+        targetTest = {
+          id: testId || `test-${fallbackGrade.toLowerCase()}-${Date.now()}`,
+          title: `اختبار وتمارين ${fallbackGrade}`,
+          subtitle: 'أسئلة وتمارين مضافة من أستاذ المادة',
+          grade: fallbackGrade,
+          trimester: 1,
+          durationMinutes: 20,
+          totalScore: 20,
+          questions: [newQ],
+        };
+        nextTests = [targetTest, ...prev];
       }
-      const createdTest: AssessmentTest = {
-        id: testId || `test-${fallbackGrade.toLowerCase()}-${Date.now()}`,
-        title: `اختبار وتمارين ${fallbackGrade}`,
-        subtitle: 'أسئلة وتمارين مضافة من أستاذ المادة',
-        grade: fallbackGrade,
-        trimester: 1,
-        durationMinutes: 20,
-        totalScore: 20,
-        questions: [newQ],
-      };
-      return [createdTest, ...prev];
+      if (firebaseUser && targetTest!) {
+        saveCustomTestInFirestore(targetTest).catch((err) => {
+          setFirebaseSyncError(formatFirebaseErrorMessage(err));
+        });
+      }
+      return nextTests;
     });
   };
 
   const handleDeleteQuestion = (testId: string, questionId: string) => {
     setTests((prev) =>
-      prev.map((t) =>
-        t.id === testId ? { ...t, questions: t.questions.filter((q) => q.id !== questionId) } : t
-      )
+      prev.map((t) => {
+        if (t.id === testId) {
+          const updated = { ...t, questions: t.questions.filter((q) => q.id !== questionId) };
+          if (firebaseUser) {
+            saveCustomTestInFirestore(updated).catch((err) => {
+              setFirebaseSyncError(formatFirebaseErrorMessage(err));
+            });
+          }
+          return updated;
+        }
+        return t;
+      })
     );
   };
 
   // Video Management (Teacher Admin)
   const handleAddVideo = (newVideo: VideoLesson) => {
     setVideos((prev) => [newVideo, ...prev]);
+    if (firebaseUser) {
+      saveVideoInFirestore(newVideo).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
     fetch('/api/videos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -449,6 +608,11 @@ export default function App() {
 
   const handleDeleteVideo = (videoId: string) => {
     setVideos((prev) => prev.filter((v) => v.id !== videoId));
+    if (firebaseUser) {
+      deleteVideoInFirestore(videoId).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
     fetch(`/api/videos/${videoId}`, {
       method: 'DELETE',
     }).catch((err) => console.error('Failed to delete video on server:', err));
@@ -457,6 +621,11 @@ export default function App() {
   // Direct Teacher Question Box
   const handleSendMessageToTeacher = (newMsg: DirectTeacherMessage) => {
     setDirectMessages((prev) => [newMsg, ...prev]);
+    if (firebaseUser) {
+      saveDirectMessageInFirestore(newMsg).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
     // Award 20 points for asking a thoughtful scientific question
     if (currentUser) {
       setCurrentUser((prev) => prev ? { ...prev, points: prev.points + 20 } : null);
@@ -477,6 +646,11 @@ export default function App() {
           : m
       )
     );
+    if (firebaseUser) {
+      replyDirectMessageInFirestore(messageId, replyText, teacherName).catch((err) => {
+        setFirebaseSyncError(formatFirebaseErrorMessage(err));
+      });
+    }
   };
 
   // Profile Save
@@ -603,11 +777,11 @@ export default function App() {
         )}
 
         {activeTab === 'forum' && (
-          <ForumSection />
+          <ForumSection firebaseUser={firebaseUser} />
         )}
 
         {activeTab === 'resources' && (
-          <ResourceHub />
+          <ResourceHub firebaseUser={firebaseUser} />
         )}
 
         {activeTab === 'methodology' && (
@@ -661,6 +835,9 @@ export default function App() {
             onReplyDirectMessage={handleReplyDirectMessage}
             rankings={rankings}
             currentUser={currentUser}
+            firebaseUser={firebaseUser}
+            firebaseSyncError={firebaseSyncError}
+            onGoogleSignIn={handleGoogleSignIn}
             initialSubtab={adminInitialSubtab}
             onNavigateToLessons={handleNavigateToLessons}
             onNavigateToExercises={handleNavigateToExercises}

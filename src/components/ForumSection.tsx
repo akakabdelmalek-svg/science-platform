@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   MessageSquare, Plus, Search, ShieldCheck, ThumbsUp, CheckCircle, 
   Paperclip, FileText, Send, AlertTriangle, Eye, User, Sparkles, Filter, 
@@ -7,9 +7,46 @@ import {
 import { ForumTopic, ForumReply, ForumAttachment } from '../types/forum';
 import { INITIAL_FORUM_TOPICS, MODERATION_RULES } from '../data/forumData';
 import { GradeLevel } from '../types/science';
+import {
+  saveForumTopicInFirestore,
+  updateForumTopicInFirestore,
+  subscribeToForumTopics,
+} from '../firebaseWebData';
 
-export const ForumSection: React.FC = () => {
-  const [topics, setTopics] = useState<ForumTopic[]>(INITIAL_FORUM_TOPICS);
+interface ForumSectionProps {
+  firebaseUser?: { uid: string; email?: string | null } | null;
+}
+
+export const ForumSection: React.FC<ForumSectionProps> = ({ firebaseUser }) => {
+  const [topics, setTopics] = useState<ForumTopic[]>(() => {
+    try {
+      const saved = localStorage.getItem('science_platform_forum_topics');
+      return saved ? JSON.parse(saved) : INITIAL_FORUM_TOPICS;
+    } catch {
+      return INITIAL_FORUM_TOPICS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('science_platform_forum_topics', JSON.stringify(topics));
+    } catch {}
+  }, [topics]);
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+    const unsub = subscribeToForumTopics((cloudTopics) => {
+      if (cloudTopics.length === 0) return;
+      setTopics((prev) => {
+        const merged = [...cloudTopics];
+        prev.forEach((p) => {
+          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+        });
+        return merged;
+      });
+    });
+    return () => unsub();
+  }, [firebaseUser]);
   const [selectedTopic, setSelectedTopic] = useState<ForumTopic | null>(null);
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -43,7 +80,16 @@ export const ForumSection: React.FC = () => {
   const handleUpvoteTopic = (topicId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setTopics((prev) =>
-      prev.map((t) => (t.id === topicId ? { ...t, upvotes: t.upvotes + 1 } : t))
+      prev.map((t) => {
+        if (t.id === topicId) {
+          const nextVotes = t.upvotes + 1;
+          if (firebaseUser) {
+            updateForumTopicInFirestore(topicId, { upvotes: nextVotes }).catch(() => {});
+          }
+          return { ...t, upvotes: nextVotes };
+        }
+        return t;
+      })
     );
     if (selectedTopic && selectedTopic.id === topicId) {
       setSelectedTopic((prev) => prev ? { ...prev, upvotes: prev.upvotes + 1 } : null);
@@ -60,6 +106,9 @@ export const ForumSection: React.FC = () => {
     const updatedTopic = { ...selectedTopic, replies: updatedReplies };
     setSelectedTopic(updatedTopic);
     setTopics((prev) => prev.map((t) => (t.id === selectedTopic.id ? updatedTopic : t)));
+    if (firebaseUser) {
+      updateForumTopicInFirestore(selectedTopic.id, { replies: updatedReplies }).catch(() => {});
+    }
     showToast('تم تسجيل تصويتك للإجابة.');
   };
 
@@ -71,6 +120,9 @@ export const ForumSection: React.FC = () => {
     );
     if (selectedTopic && selectedTopic.id === topicId) {
       setSelectedTopic((prev) => prev ? { ...prev, isReported: true } : null);
+    }
+    if (firebaseUser) {
+      updateForumTopicInFirestore(topicId, { isReported: true }).catch(() => {});
     }
     showToast('تم إرسال البلاغ لفريق الإشراف التربوي للمراجعة والتدقيق.');
   };
@@ -112,6 +164,9 @@ export const ForumSection: React.FC = () => {
     };
 
     setTopics([created, ...topics]);
+    if (firebaseUser) {
+      saveForumTopicInFirestore(created).catch(() => {});
+    }
     setShowNewTopicModal(false);
     setNewTitle('');
     setNewContent('');
@@ -141,6 +196,9 @@ export const ForumSection: React.FC = () => {
 
     setSelectedTopic(updatedTopic);
     setTopics((prev) => prev.map((t) => (t.id === selectedTopic.id ? updatedTopic : t)));
+    if (firebaseUser) {
+      updateForumTopicInFirestore(selectedTopic.id, { replies: updatedReplies }).catch(() => {});
+    }
     setReplyText('');
     showToast('تمت إضافة إجابتك ومشاركتها في الموضوع.');
   };
