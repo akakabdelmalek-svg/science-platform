@@ -81,34 +81,57 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Save changes to localStorage
+  // Save changes to localStorage safely
   useEffect(() => {
-    localStorage.setItem('science_platform_lessons', JSON.stringify(lessons));
+    try {
+      localStorage.setItem('science_platform_lessons', JSON.stringify(lessons));
+    } catch {
+      try {
+        const lightweight = lessons.map((l) =>
+          l.attachment ? { ...l, attachment: { ...l.attachment, dataUrl: '' } } : l
+        );
+        localStorage.setItem('science_platform_lessons', JSON.stringify(lightweight));
+      } catch {
+        // Ignore quota limits; server memory keeps full attachments
+      }
+    }
   }, [lessons]);
 
   useEffect(() => {
-    localStorage.setItem('science_platform_exercises', JSON.stringify(exercises));
+    try {
+      localStorage.setItem('science_platform_exercises', JSON.stringify(exercises));
+    } catch {}
   }, [exercises]);
 
   useEffect(() => {
-    localStorage.setItem('science_platform_tests', JSON.stringify(tests));
+    try {
+      localStorage.setItem('science_platform_tests', JSON.stringify(tests));
+    } catch {}
   }, [tests]);
 
   useEffect(() => {
-    localStorage.setItem('science_platform_videos', JSON.stringify(videos));
+    try {
+      localStorage.setItem('science_platform_videos', JSON.stringify(videos));
+    } catch {}
   }, [videos]);
 
   useEffect(() => {
-    localStorage.setItem('science_platform_rankings', JSON.stringify(rankings));
+    try {
+      localStorage.setItem('science_platform_rankings', JSON.stringify(rankings));
+    } catch {}
   }, [rankings]);
 
   useEffect(() => {
-    localStorage.setItem('science_platform_direct_messages', JSON.stringify(directMessages));
+    try {
+      localStorage.setItem('science_platform_direct_messages', JSON.stringify(directMessages));
+    } catch {}
   }, [directMessages]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('science_platform_user', JSON.stringify(currentUser));
+      try {
+        localStorage.setItem('science_platform_user', JSON.stringify(currentUser));
+      } catch {}
     }
   }, [currentUser]);
 

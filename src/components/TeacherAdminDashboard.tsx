@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, Lock, Plus, Trash2, Edit3, CheckCircle2, 
   BookOpen, Video, HelpCircle, User, MessageCircle, 
-  BarChart3, Sparkles, X, Send, Eye, KeyRound, FileText, ArrowLeft
+  BarChart3, Sparkles, X, Send, Eye, KeyRound, FileText, ArrowLeft,
+  Upload, Download, FileSpreadsheet, Presentation, FileCode
 } from 'lucide-react';
-import { LessonUnit, GradeLevel, ScienceDomain, TeacherExercise } from '../types/science';
+import { LessonUnit, LessonAttachment, GradeLevel, ScienceDomain, TeacherExercise } from '../types/science';
 import { AssessmentTest, AssessmentQuestion } from '../types/assessment';
 import { VideoLesson } from '../data/videoData';
 import { DirectTeacherMessage, StudentRanking, UserProfile } from '../types/user';
@@ -96,6 +97,8 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   const [lessonDuration, setLessonDuration] = useState<number>(45);
   const [lessonSummary, setLessonSummary] = useState<string>('');
   const [lessonKeyConcept, setLessonKeyConcept] = useState<string>('');
+  const [lessonAttachment, setLessonAttachment] = useState<LessonAttachment | null>(null);
+  const [lessonFileError, setLessonFileError] = useState<string | null>(null);
 
   // New Applied Exercise Form
   const [exTitle, setExTitle] = useState<string>('');
@@ -155,19 +158,83 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
     }
   };
 
+  // Handle importing Word / Excel / PowerPoint / PDF lesson file
+  const handleLessonFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLessonFileError(null);
+    const maxBytes = 15 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setLessonFileError('حجم الملف يتجاوز 15 ميغابايت. يرجى اختيار ملف أصغر حجماً.');
+      return;
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    let fileType: LessonAttachment['fileType'] = 'other';
+    if (ext === 'docx' || ext === 'doc') fileType = 'docx';
+    else if (ext === 'xlsx' || ext === 'xls') fileType = 'xlsx';
+    else if (ext === 'pptx' || ext === 'ppt') fileType = 'pptx';
+    else if (ext === 'pdf') fileType = 'pdf';
+
+    if (fileType === 'other') {
+      setLessonFileError('يرجى استيراد ملف بصيغة Word (.docx/.doc) أو Excel (.xlsx/.xls) أو PowerPoint (.pptx/.ppt) أو PDF.');
+      return;
+    }
+
+    const sizeFormatted =
+      file.size >= 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+        : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!dataUrl) {
+        setLessonFileError('تعذّر قراءة الملف المحدد. يرجى المحاولة مرة أخرى.');
+        return;
+      }
+      setLessonAttachment({
+        fileName: file.name,
+        fileType,
+        mimeType: file.type || 'application/octet-stream',
+        fileSize: sizeFormatted,
+        dataUrl,
+      });
+      if (!lessonTitle.trim()) {
+        const cleanTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ');
+        setLessonTitle(cleanTitle);
+      }
+    };
+    reader.onerror = () => {
+      setLessonFileError('حدث خطأ أثناء قراءة الملف.');
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Add Lesson Submit
   const handleCreateLesson = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lessonTitle.trim() || !lessonSummary.trim()) return;
+    if (!lessonTitle.trim()) return;
+    if (!lessonSummary.trim() && !lessonAttachment) return;
+
+    const effectiveSummary =
+      lessonSummary.trim() ||
+      `ملف درس مرفق بصيغة ${lessonAttachment?.fileType.toUpperCase()} (${lessonAttachment?.fileName}) جاهز للتحميل والمراجعة.`;
 
     const newLesson: LessonUnit = {
       id: `lesson-${Date.now()}`,
       grade: lessonGrade,
       domain: lessonDomain,
       title: lessonTitle.trim(),
-      subtitle: lessonSubtitle.trim() || 'درس مفاهيمي جديد مضاف من الأستاذ',
+      subtitle:
+        lessonSubtitle.trim() ||
+        (lessonAttachment
+          ? `ملف درس مرفق (${lessonAttachment.fileType.toUpperCase()})`
+          : 'درس مفاهيمي جديد مضاف من الأستاذ'),
       durationMinutes: lessonDuration,
-      summary: lessonSummary.trim(),
+      attachment: lessonAttachment || undefined,
+      summary: effectiveSummary,
       keyConcepts: [
         lessonKeyConcept.trim() || 'مفهوم علمي أساسي مقرر في المنهاج',
       ],
@@ -177,7 +244,7 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
       steps: [
         {
           title: '1. المحطة الاستكشافية والملاحظة',
-          description: lessonSummary.trim(),
+          description: effectiveSummary,
         },
       ],
     };
@@ -189,6 +256,8 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
     setLessonSubtitle('');
     setLessonSummary('');
     setLessonKeyConcept('');
+    setLessonAttachment(null);
+    setLessonFileError(null);
     showToast('تمت إضافة الدرس الجديد بنجاح وسيظهر مباشرة في قسم الدروس!');
   };
 
@@ -586,6 +655,12 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                       <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
                         {lesson.summary}
                       </p>
+                      {lesson.attachment && (
+                        <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold border border-indigo-200 dark:border-indigo-800">
+                          <FileText className="w-3 h-3" />
+                          <span>ملف مرفق: {lesson.attachment.fileName} ({lesson.attachment.fileSize})</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -1165,11 +1240,74 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  ملخص الدرس:
+                  استيراد ملف الدرس (Word / Excel / PowerPoint / PDF):
+                </label>
+                <div className="rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 p-3.5 text-center space-y-2">
+                  {lessonAttachment ? (
+                    <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800 text-right">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold text-white shrink-0 ${
+                          lessonAttachment.fileType === 'pptx'
+                            ? 'bg-orange-500'
+                            : lessonAttachment.fileType === 'docx'
+                            ? 'bg-blue-600'
+                            : lessonAttachment.fileType === 'xlsx'
+                            ? 'bg-emerald-600'
+                            : 'bg-rose-600'
+                        }`}>
+                          {lessonAttachment.fileType.toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {lessonAttachment.fileName}
+                          </div>
+                          <div className="text-[10px] text-slate-500">{lessonAttachment.fileSize}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLessonAttachment(null);
+                          setLessonFileError(null);
+                        }}
+                        className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded cursor-pointer"
+                        title="إزالة الملف"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center gap-1.5 py-1">
+                      <Upload className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        اضغط لاستيراد ملف الدرس (.docx / .xlsx / .pptx / .pdf)
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        يدعم مستندات Word وجداول Excel وعروض PowerPoint حتى 15 MB
+                      </span>
+                      <input
+                        type="file"
+                        accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/pdf"
+                        onChange={handleLessonFileImport}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                  {lessonFileError && (
+                    <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                      {lessonFileError}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  ملخص الدرس {lessonAttachment ? '(اختياري عند استيراد ملف)' : ''}:
                 </label>
                 <textarea
                   rows={3}
-                  required
+                  required={!lessonAttachment}
                   placeholder="الملخص العلمي المركّز للدرس..."
                   value={lessonSummary}
                   onChange={(e) => setLessonSummary(e.target.value)}

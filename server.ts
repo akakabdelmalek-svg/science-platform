@@ -11,7 +11,7 @@ const app = express();
 const PORT = 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // In-Memory Data Store (Cleaned state - all accounts and previous lessons deleted)
 let lessons: any[] = [];

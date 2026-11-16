@@ -22,6 +22,14 @@ export type ScienceDomain =
   | 'neuro_immunity'      // الاتصال العصبي والمناعة والوراثة
   | 'methodology';        // منهجية العلوم والاستدلال
 
+export interface LessonAttachment {
+  fileName: string;
+  fileType: 'docx' | 'xlsx' | 'pptx' | 'pdf' | 'other';
+  mimeType: string;
+  fileSize: string;
+  dataUrl: string;
+}
+
 export interface LessonUnit {
   id: string;
   grade: GradeLevel;
@@ -30,6 +38,7 @@ export interface LessonUnit {
   subtitle: string;
   durationMinutes: number;
   image?: string;
+  attachment?: LessonAttachment;
   summary: string;
   keyConcepts: string[];
   scientificTerms: { ar: string; fr: string; definition: string }[];
