@@ -1,7 +1,12 @@
 import express, { Request, Response } from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +32,7 @@ const PORT = isProduction
   ? Number(process.env.DEFAULT_APP_PORT || process.env.PORT || 3000)
   : 3000;
 
+app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Persistent Disk JSON Database for Web Platform Data
@@ -107,7 +113,7 @@ app.post('/api/lessons', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'بيانات الدرس غير مكتملة' });
   }
   if (!newLesson.id) {
-    newLesson.id = `lesson-${Date.now()}`;
+    newLesson.id = uuidv4();
   }
   const existsIndex = dbState.lessons.findIndex((l) => l.id === newLesson.id);
   if (existsIndex >= 0) {
@@ -137,7 +143,7 @@ app.post('/api/exercises', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'بيانات التمرين غير مكتملة' });
   }
   if (!newExercise.id) {
-    newExercise.id = `ex-${Date.now()}`;
+    newExercise.id = uuidv4();
   }
   const existsIndex = dbState.exercises.findIndex((ex) => ex.id === newExercise.id);
   if (existsIndex >= 0) {
@@ -167,7 +173,7 @@ app.post('/api/videos', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'بيانات الفيديو غير مكتملة' });
   }
   if (!newVideo.id) {
-    newVideo.id = `vid-${Date.now()}`;
+    newVideo.id = uuidv4();
   }
   const idx = dbState.videos.findIndex((v) => v.id === newVideo.id);
   if (idx >= 0) {
@@ -216,7 +222,7 @@ app.post('/api/resources', (req: Request, res: Response) => {
   if (!item || !item.title) {
     return res.status(400).json({ error: 'بيانات المورد غير مكتملة' });
   }
-  if (!item.id) item.id = `res-${Date.now()}`;
+  if (!item.id) item.id = uuidv4();
   const idx = dbState.resources.findIndex((r) => r.id === item.id);
   if (idx >= 0) {
     dbState.resources[idx] = item;
@@ -272,7 +278,8 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Teacher Passcode Verification
 app.post('/api/verify-teacher', (req: Request, res: Response) => {
   const { passcode } = req.body;
-  if (passcode === '0542836997' || passcode === 'prof2026' || passcode === 'admin') {
+  const TEACHER_PASSCODE = process.env.TEACHER_PASSCODE || '0542836997';
+  if (passcode === TEACHER_PASSCODE) {
     res.json({ success: true, message: 'رمز الأستاذ صحيح ومصرح بالدخول' });
   } else {
     res.status(401).json({ success: false, message: 'رمز المرور غير صحيح' });
@@ -309,7 +316,7 @@ app.post('/api/rankings', (req: Request, res: Response) => {
     }
   } else {
     dbState.rankings.push({
-      id: `st-${Date.now()}`,
+      id: uuidv4(),
       firstName: cleanFirstName,
       name: cleanFirstName,
       grade: grade || '4AM',
@@ -342,8 +349,8 @@ app.post('/api/messages', (req: Request, res: Response) => {
   const cleanFirstName = String(studentName || 'تلميذ').trim().split(/\s+/)[0];
 
   const newMsg = {
-    id: id || `msg-${Date.now()}`,
-    studentId: studentId || `st-${Date.now()}`,
+    id: id || uuidv4(),
+    studentId: studentId || uuidv4(),
     studentName: cleanFirstName,
     studentGrade: studentGrade || '4AM',
     topic: topic || 'علوم عامة',
@@ -416,7 +423,7 @@ async function startServer() {
     }
 
     const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server running at http://localhost:${PORT} (${appMetadata.name})`);
+      console.log(`✅ Server running at http://localhost:${PORT} (${appMetadata.name})`);
     });
 
     server.on('error', (err: any) => {
