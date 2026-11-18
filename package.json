@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "science-platform",
+  "description": "منصة تفاعلية شاملة لمادة علوم الطبيعة والحياة لسنوات الطور المتوسط (1، 2، 3 و4 متوسط BEM) تحتوي على مختبر افتراضي، مخططات تشريحية، بنك تمارين، ومنهجية الإجابة العلمية.",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

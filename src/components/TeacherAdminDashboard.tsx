@@ -1413,6 +1413,27 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                 />
               </div>
 
+              <div className={`p-2.5 rounded-lg border text-[11px] flex flex-wrap items-center justify-between gap-2 ${
+                isTeacherCloudAdmin(firebaseUser?.email)
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+              }`}>
+                <span className="font-semibold">
+                  {isTeacherCloudAdmin(firebaseUser?.email)
+                    ? `✓ متصل بالسحابة (${firebaseUser?.email}) — سيظهر الدرس لجميع الحسابات والمتصفحات.`
+                    : 'تنبيه: حساب الأستاذ السحابي غير مربوط حالياً؛ قد يُحفظ الدرس محلياً فقط حتى ربط Google.'}
+                </span>
+                {onGoogleSignIn && !isTeacherCloudAdmin(firebaseUser?.email) && (
+                  <button
+                    type="button"
+                    onClick={() => onGoogleSignIn()}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md font-bold cursor-pointer"
+                  >
+                    ربط حساب الأستاذ
+                  </button>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
@@ -1574,6 +1595,27 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
                   onChange={(e) => setExSolution(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
+              </div>
+
+              <div className={`p-2.5 rounded-lg border text-[11px] flex flex-wrap items-center justify-between gap-2 ${
+                isTeacherCloudAdmin(firebaseUser?.email)
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+              }`}>
+                <span className="font-semibold">
+                  {isTeacherCloudAdmin(firebaseUser?.email)
+                    ? `✓ متصل بالسحابة (${firebaseUser?.email}) — سيظهر التمرين في كافة المتصفحات.`
+                    : 'تنبيه: اربط حساب الأستاذ السحابي (Google) لمزامنة التمرين عبر جميع الأجهزة.'}
+                </span>
+                {onGoogleSignIn && !isTeacherCloudAdmin(firebaseUser?.email) && (
+                  <button
+                    type="button"
+                    onClick={() => onGoogleSignIn()}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md font-bold cursor-pointer"
+                  >
+                    ربط حساب الأستاذ
+                  </button>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">

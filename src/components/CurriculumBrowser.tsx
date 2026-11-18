@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Clock, ChevronDown, ChevronUp, CheckCircle2, 
   Lightbulb, ArrowLeft, Bookmark, Sparkles, Plus, Trash2, HelpCircle, Eye,
-  Download, FileText, FileSpreadsheet, Presentation, FileCode
+  Download, FileText, FileSpreadsheet, Presentation, FileCode, Cloud
 } from 'lucide-react';
 import { GradeLevel, LessonUnit, LessonAttachment, TeacherExercise } from '../types/science';
 import { GRADES_DATA, LESSONS_DATA } from '../data/curriculumData';
@@ -15,6 +15,9 @@ interface CurriculumBrowserProps {
   exercises?: TeacherExercise[];
   onOpenAddLesson?: () => void;
   onDeleteLesson?: (lessonId: string) => void;
+  firebaseUser?: { uid: string; email?: string | null } | null;
+  firebaseSyncError?: string | null;
+  onGoogleSignIn?: () => Promise<any> | void;
 }
 
 export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
@@ -24,6 +27,9 @@ export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
   exercises = [],
   onOpenAddLesson,
   onDeleteLesson,
+  firebaseUser,
+  firebaseSyncError,
+  onGoogleSignIn,
 }) => {
   const [activeGrade, setActiveGrade] = useState<GradeLevel | 'all'>(selectedGradeProp);
   const [selectedLesson, setSelectedLesson] = useState<LessonUnit | null>(null);
@@ -182,6 +188,37 @@ export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Cloud Sync Prompt for Cross-Browser / Multi-Account Access */}
+      {(!firebaseUser || firebaseSyncError) && (
+        <div className="bg-indigo-50/90 dark:bg-indigo-950/30 rounded-xl p-3.5 border border-indigo-200 dark:border-indigo-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <Cloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              {!firebaseUser && (
+                <p className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                  لعرض الدروس المضافة من الأستاذ عبر المتصفحات والحسابات الأخرى (Firefox ↔ Edge)، قم بمزامنة السحابة عبر Google.
+                </p>
+              )}
+              {firebaseSyncError && (
+                <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                  {firebaseSyncError}
+                </p>
+              )}
+            </div>
+          </div>
+          {!firebaseUser && onGoogleSignIn && (
+            <button
+              type="button"
+              onClick={() => onGoogleSignIn()}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 shadow-sm"
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>مزامنة الدروس من السحابة عبر Google</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Main Content Area */}
       {selectedLesson ? (

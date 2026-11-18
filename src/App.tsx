@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { TopNavbar, ActiveNavTab } from './components/TopNavbar';
 import { CurriculumBrowser } from './components/CurriculumBrowser';
 import { InteractiveLabsHub } from './components/InteractiveLabsHub';
@@ -32,6 +32,7 @@ import {
   formatFirebaseErrorMessage,
 } from './firebase';
 import {
+  isTeacherCloudAdmin,
   saveLessonInFirestore,
   deleteLessonInFirestore,
   subscribeToLessons,
@@ -48,14 +49,23 @@ import {
   subscribeToDirectMessages,
 } from './firebaseWebData';
 
-async function fetchJsonSafe(url: string): Promise<any[] | null> {
+interface ServerSyncState {
+  lessons?: LessonUnit[];
+  exercises?: TeacherExercise[];
+  videos?: VideoLesson[];
+  tests?: AssessmentTest[];
+  rankings?: StudentRanking[];
+  directMessages?: DirectTeacherMessage[];
+}
+
+async function fetchSyncSafe(): Promise<ServerSyncState | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch('/api/sync', { cache: 'no-store' });
     if (!res.ok) return null;
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) return null;
     const data = await res.json();
-    return Array.isArray(data) ? data : null;
+    return data && typeof data === 'object' ? (data as ServerSyncState) : null;
   } catch {
     return null;
   }
@@ -113,6 +123,7 @@ export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isFirebaseReady, setIsFirebaseReady] = useState<boolean>(false);
   const [firebaseSyncError, setFirebaseSyncError] = useState<string | null>(null);
+  const syncedCloudIdsRef = useRef<Set<string>>(new Set());
 
   // If no user account is set, modal is obligatorily open
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(!currentUser);
@@ -260,6 +271,7 @@ export default function App() {
 
     const unsubLessons = subscribeToLessons(
       (cloudLessons) => {
+        cloudLessons.forEach((cl) => syncedCloudIdsRef.current.add(`lesson:${cl.id}`));
         if (cloudLessons.length === 0) return;
         setLessons((prev) => {
           const prevMap = new Map(prev.map((l) => [l.id, l]));
@@ -284,6 +296,7 @@ export default function App() {
 
     const unsubExercises = subscribeToExercises(
       (cloudEx) => {
+        cloudEx.forEach((ce) => syncedCloudIdsRef.current.add(`ex:${ce.id}`));
         if (cloudEx.length === 0) return;
         setExercises((prev) => {
           const merged = [...cloudEx];
@@ -298,6 +311,7 @@ export default function App() {
 
     const unsubVideos = subscribeToVideos(
       (cloudVids) => {
+        cloudVids.forEach((cv) => syncedCloudIdsRef.current.add(`vid:${cv.id}`));
         if (cloudVids.length === 0) return;
         setVideos((prev) => {
           const merged = [...cloudVids];
@@ -312,6 +326,7 @@ export default function App() {
 
     const unsubTests = subscribeToCustomTests(
       (cloudTests) => {
+        cloudTests.forEach((ct) => syncedCloudIdsRef.current.add(`test:${ct.id}`));
         if (cloudTests.length === 0) return;
         setTests((prev) => {
           const cloudMap = new Map(cloudTests.map((t) => [t.id, t]));
@@ -347,6 +362,46 @@ export default function App() {
       unsubMsgs();
     };
   }, [isFirebaseReady, firebaseUser]);
+
+  // Auto-upload any locally created lessons/exercises/videos to Firestore once teacher signs into Google
+  useEffect(() => {
+    if (!isFirebaseReady || !firebaseUser || !isTeacherCloudAdmin(firebaseUser.email)) return;
+
+    const timer = setTimeout(() => {
+      lessons.forEach((l) => {
+        const key = `lesson:${l.id}`;
+        if (!syncedCloudIdsRef.current.has(key)) {
+          syncedCloudIdsRef.current.add(key);
+          saveLessonInFirestore(l).catch(() => {
+            syncedCloudIdsRef.current.delete(key);
+          });
+        }
+      });
+
+      exercises.forEach((ex) => {
+        const key = `ex:${ex.id}`;
+        if (!syncedCloudIdsRef.current.has(key)) {
+          syncedCloudIdsRef.current.add(key);
+          saveExerciseInFirestore(ex).catch(() => {
+            syncedCloudIdsRef.current.delete(key);
+          });
+        }
+      });
+
+      videos.forEach((vid) => {
+        if (!vid.id.startsWith('vid-')) return;
+        const key = `vid:${vid.id}`;
+        if (!syncedCloudIdsRef.current.has(key)) {
+          syncedCloudIdsRef.current.add(key);
+          saveVideoInFirestore(vid).catch(() => {
+            syncedCloudIdsRef.current.delete(key);
+          });
+        }
+      });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [isFirebaseReady, firebaseUser, lessons, exercises, videos]);
 
   // Sync student points updates automatically to Firebase Firestore
   useEffect(() => {
@@ -394,11 +449,90 @@ export default function App() {
     } catch {}
   };
 
-  // Sync with IndexedDB & optional Server on mount
+  const syncWithBackendServer = useCallback(async () => {
+    const syncData = await fetchSyncSafe();
+    if (!syncData) return;
+
+    if (Array.isArray(syncData.lessons) && syncData.lessons.length > 0) {
+      setLessons((prev) => {
+        const prevMap = new Map(prev.map((l) => [l.id, l]));
+        const merged = syncData.lessons!.map((sl) => {
+          const localMatch = prevMap.get(sl.id);
+          if (sl.attachment && !sl.attachment.dataUrl && localMatch?.attachment?.dataUrl) {
+            return {
+              ...sl,
+              attachment: { ...sl.attachment, dataUrl: localMatch.attachment.dataUrl },
+            };
+          }
+          return sl;
+        });
+        prev.forEach((p) => {
+          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+        });
+        return merged;
+      });
+    }
+
+    if (Array.isArray(syncData.exercises) && syncData.exercises.length > 0) {
+      setExercises((prev) => {
+        const merged = [...syncData.exercises!];
+        prev.forEach((p) => {
+          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+        });
+        return merged;
+      });
+    }
+
+    if (Array.isArray(syncData.videos) && syncData.videos.length > 0) {
+      setVideos((prev) => {
+        const merged = [...syncData.videos!];
+        prev.forEach((p) => {
+          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+        });
+        return merged;
+      });
+    }
+
+    if (Array.isArray(syncData.tests) && syncData.tests.length > 0) {
+      setTests((prev) => {
+        const serverMap = new Map(syncData.tests!.map((t) => [t.id, t]));
+        const merged = prev.map((t) => serverMap.get(t.id) || t);
+        syncData.tests!.forEach((st) => {
+          if (!merged.some((m) => m.id === st.id)) merged.unshift(st);
+        });
+        return merged;
+      });
+    }
+
+    if (Array.isArray(syncData.rankings) && syncData.rankings.length > 0) {
+      setRankings((prev) => {
+        const merged = [...syncData.rankings!];
+        prev.forEach((p) => {
+          if (!merged.some((m) => m.id === p.id || (m.firstName === p.firstName && m.grade === p.grade))) {
+            merged.push(p);
+          }
+        });
+        return merged
+          .sort((a, b) => b.points - a.points)
+          .map((item, idx) => ({ ...item, rank: idx + 1 }));
+      });
+    }
+
+    if (Array.isArray(syncData.directMessages) && syncData.directMessages.length > 0) {
+      setDirectMessages((prev) => {
+        const merged = [...syncData.directMessages!];
+        prev.forEach((p) => {
+          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+        });
+        return merged;
+      });
+    }
+  }, []);
+
+  // Sync with IndexedDB & persistent Backend Server on mount, window focus, and periodic refresh
   useEffect(() => {
     let active = true;
 
-    // 1. Hydrate any attachment dataUrls from IndexedDB (critical for static Vercel hosting)
     const hydrateFromIndexedDb = async () => {
       const hydrated = await Promise.all(
         lessons.map(async (l) => {
@@ -417,68 +551,28 @@ export default function App() {
       }
     };
     hydrateFromIndexedDb();
+    syncWithBackendServer();
 
-    // 2. Sync with backend if running full-stack server.ts
-    fetchJsonSafe('/api/lessons').then((serverLessons) => {
-      if (active && serverLessons && serverLessons.length > 0) {
-        setLessons((prev) => {
-          const merged = [...serverLessons];
-          prev.forEach((p) => {
-            if (!merged.some((m) => m.id === p.id)) {
-              merged.push(p);
-            }
-          });
-          return merged;
-        });
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        syncWithBackendServer();
       }
-    });
-
-    fetchJsonSafe('/api/exercises').then((serverExercises) => {
-      if (active && serverExercises && serverExercises.length > 0) {
-        setExercises((prev) => {
-          const merged = [...serverExercises];
-          prev.forEach((p) => {
-            if (!merged.some((m) => m.id === p.id)) {
-              merged.push(p);
-            }
-          });
-          return merged;
-        });
+    };
+    window.addEventListener('focus', syncWithBackendServer);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncWithBackendServer();
       }
-    });
-
-    fetchJsonSafe('/api/videos').then((serverVideos) => {
-      if (active && serverVideos && serverVideos.length > 0) {
-        setVideos((prev) => {
-          const merged = [...serverVideos];
-          prev.forEach((p) => {
-            if (!merged.some((m) => m.id === p.id)) {
-              merged.push(p);
-            }
-          });
-          return merged;
-        });
-      }
-    });
-
-    fetchJsonSafe('/api/rankings').then((serverRankings) => {
-      if (active && serverRankings && serverRankings.length > 0) {
-        setRankings((prev) => {
-          const merged = [...serverRankings];
-          prev.forEach((p) => {
-            if (!merged.some((m) => m.id === p.id)) {
-              merged.push(p);
-            }
-          });
-          return merged;
-        });
-      }
-    });
+    }, 15000);
 
     return () => {
       active = false;
+      window.removeEventListener('focus', syncWithBackendServer);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      clearInterval(interval);
     };
-  }, []);
+  }, [syncWithBackendServer]);
 
   // Lesson Management (Teacher Admin)
   const handleAddLesson = (newLesson: LessonUnit) => {
@@ -486,8 +580,10 @@ export default function App() {
     if (newLesson.attachment?.dataUrl) {
       saveLessonFile(newLesson.id, newLesson.attachment.dataUrl);
     }
-    if (firebaseUser) {
+    if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
+      syncedCloudIdsRef.current.add(`lesson:${newLesson.id}`);
       saveLessonInFirestore(newLesson).catch((err) => {
+        syncedCloudIdsRef.current.delete(`lesson:${newLesson.id}`);
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
     }
@@ -501,7 +597,8 @@ export default function App() {
   const handleDeleteLesson = (lessonId: string) => {
     setLessons((prev) => prev.filter((l) => l.id !== lessonId));
     deleteLessonFile(lessonId);
-    if (firebaseUser) {
+    syncedCloudIdsRef.current.delete(`lesson:${lessonId}`);
+    if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
       deleteLessonInFirestore(lessonId).catch((err) => {
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
@@ -514,8 +611,10 @@ export default function App() {
   // Applied Exercise Management (Teacher Admin)
   const handleAddExercise = (newExercise: TeacherExercise) => {
     setExercises((prev) => [newExercise, ...prev]);
-    if (firebaseUser) {
+    if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
+      syncedCloudIdsRef.current.add(`ex:${newExercise.id}`);
       saveExerciseInFirestore(newExercise).catch((err) => {
+        syncedCloudIdsRef.current.delete(`ex:${newExercise.id}`);
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
     }
@@ -523,19 +622,20 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newExercise),
-    }).catch((err) => console.error('Failed to sync exercise to server:', err));
+    }).catch(() => {});
   };
 
   const handleDeleteExercise = (exerciseId: string) => {
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
-    if (firebaseUser) {
+    syncedCloudIdsRef.current.delete(`ex:${exerciseId}`);
+    if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
       deleteExerciseInFirestore(exerciseId).catch((err) => {
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
     }
     fetch(`/api/exercises/${exerciseId}`, {
       method: 'DELETE',
-    }).catch((err) => console.error('Failed to delete exercise on server:', err));
+    }).catch(() => {});
   };
 
   // Question Management (Teacher Admin)
@@ -565,10 +665,17 @@ export default function App() {
         };
         nextTests = [targetTest, ...prev];
       }
-      if (firebaseUser && targetTest!) {
-        saveCustomTestInFirestore(targetTest).catch((err) => {
-          setFirebaseSyncError(formatFirebaseErrorMessage(err));
-        });
+      if (targetTest!) {
+        if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
+          saveCustomTestInFirestore(targetTest).catch((err) => {
+            setFirebaseSyncError(formatFirebaseErrorMessage(err));
+          });
+        }
+        fetch('/api/tests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(targetTest),
+        }).catch(() => {});
       }
       return nextTests;
     });
@@ -579,11 +686,16 @@ export default function App() {
       prev.map((t) => {
         if (t.id === testId) {
           const updated = { ...t, questions: t.questions.filter((q) => q.id !== questionId) };
-          if (firebaseUser) {
+          if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
             saveCustomTestInFirestore(updated).catch((err) => {
               setFirebaseSyncError(formatFirebaseErrorMessage(err));
             });
           }
+          fetch('/api/tests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          }).catch(() => {});
           return updated;
         }
         return t;
@@ -594,8 +706,10 @@ export default function App() {
   // Video Management (Teacher Admin)
   const handleAddVideo = (newVideo: VideoLesson) => {
     setVideos((prev) => [newVideo, ...prev]);
-    if (firebaseUser) {
+    if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
+      syncedCloudIdsRef.current.add(`vid:${newVideo.id}`);
       saveVideoInFirestore(newVideo).catch((err) => {
+        syncedCloudIdsRef.current.delete(`vid:${newVideo.id}`);
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
     }
@@ -603,19 +717,20 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newVideo),
-    }).catch((err) => console.error('Failed to sync video to server:', err));
+    }).catch(() => {});
   };
 
   const handleDeleteVideo = (videoId: string) => {
     setVideos((prev) => prev.filter((v) => v.id !== videoId));
-    if (firebaseUser) {
+    syncedCloudIdsRef.current.delete(`vid:${videoId}`);
+    if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
       deleteVideoInFirestore(videoId).catch((err) => {
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
     }
     fetch(`/api/videos/${videoId}`, {
       method: 'DELETE',
-    }).catch((err) => console.error('Failed to delete video on server:', err));
+    }).catch(() => {});
   };
 
   // Direct Teacher Question Box
@@ -626,6 +741,11 @@ export default function App() {
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
     }
+    fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMsg),
+    }).catch(() => {});
     // Award 20 points for asking a thoughtful scientific question
     if (currentUser) {
       setCurrentUser((prev) => prev ? { ...prev, points: prev.points + 20 } : null);
@@ -646,11 +766,16 @@ export default function App() {
           : m
       )
     );
-    if (firebaseUser) {
+    if (firebaseUser && isTeacherCloudAdmin(firebaseUser.email)) {
       replyDirectMessageInFirestore(messageId, replyText, teacherName).catch((err) => {
         setFirebaseSyncError(formatFirebaseErrorMessage(err));
       });
     }
+    fetch(`/api/messages/${messageId}/reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ replyText, teacherName }),
+    }).catch(() => {});
   };
 
   // Profile Save
@@ -732,6 +857,9 @@ export default function App() {
               setActiveTab('admin');
             }}
             onDeleteLesson={handleDeleteLesson}
+            firebaseUser={firebaseUser}
+            firebaseSyncError={firebaseSyncError}
+            onGoogleSignIn={handleGoogleSignIn}
           />
         )}
 
