@@ -158,7 +158,7 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPass = passcode.trim();
-    if (cleanPass === '0542836997' || cleanPass === 'prof2026' || cleanPass === 'admin') {
+    if (cleanPass === '0542836997') {
       setIsAuthenticated(true);
       setAuthError(null);
       showToast('مرحباً بك أستاذي الكريم في لوحة التحكم والإدارة.');
@@ -450,18 +450,6 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
             تسجيل الدخول إلى لوحة الأستاذ
           </button>
         </form>
-
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-          <button
-            onClick={() => {
-              setIsAuthenticated(true);
-              showToast('تم الدخول كأستاذ المادة.');
-            }}
-            className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-          >
-            دخول فوري مباشر (كأستاذ المادة للمعاينة التجريبية)
-          </button>
-        </div>
       </div>
     );
   }

@@ -277,9 +277,9 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // Teacher Passcode Verification
 app.post('/api/verify-teacher', (req: Request, res: Response) => {
-  const { passcode } = req.body;
-  const TEACHER_PASSCODE = process.env.TEACHER_PASSCODE || '0542836997';
-  if (passcode === TEACHER_PASSCODE) {
+  const cleanPasscode = String(req.body?.passcode || '').trim();
+  const TEACHER_PASSCODE = (process.env.TEACHER_PASSCODE || '0542836997').trim();
+  if (cleanPasscode === TEACHER_PASSCODE) {
     res.json({ success: true, message: 'رمز الأستاذ صحيح ومصرح بالدخول' });
   } else {
     res.status(401).json({ success: false, message: 'رمز المرور غير صحيح' });
