@@ -275,11 +275,24 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
+function getTeacherPasscode(): string {
+  try {
+    const envPath = path.resolve(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const parsed = dotenv.parse(fs.readFileSync(envPath, 'utf-8'));
+      if (parsed.TEACHER_PASSCODE?.trim()) {
+        return parsed.TEACHER_PASSCODE.trim();
+      }
+    }
+  } catch {}
+  return '0542836997';
+}
+
 // Teacher Passcode Verification
 app.post('/api/verify-teacher', (req: Request, res: Response) => {
   const cleanPasscode = String(req.body?.passcode || '').trim();
-  const TEACHER_PASSCODE = (process.env.TEACHER_PASSCODE || '0542836997').trim();
-  if (cleanPasscode === TEACHER_PASSCODE) {
+  const teacherPasscode = getTeacherPasscode();
+  if (cleanPasscode === teacherPasscode) {
     res.json({ success: true, message: 'رمز الأستاذ صحيح ومصرح بالدخول' });
   } else {
     res.status(401).json({ success: false, message: 'رمز المرور غير صحيح' });
