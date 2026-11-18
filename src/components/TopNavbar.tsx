@@ -168,7 +168,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800'
             }`}
-            title="فضاء إدارة الأستاذ (كلمة السر 0542836997)"
+            title="فضاء إدارة الأستاذ"
           >
             إدارة الأستاذ 🔒
           </button>

@@ -497,7 +497,7 @@ export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
               لا توجد دروس مضافة حالياً في {currentGradeInfo.name}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-              يمكن لأستاذ المادة إضافة الدروس المقررة والمفاهيم الأساسية من خلال لوحة إدارة الأستاذ (🔒) بالرمز السري 0542836997، وستظهر هنا مباشرة في قسم الدروس.
+              يمكن لأستاذ المادة إضافة الدروس المقررة والمفاهيم الأساسية من خلال لوحة إدارة الأستاذ (🔒)، وستظهر هنا مباشرة في قسم الدروس.
             </p>
             {activeGrade !== 'all' && allLessons.length > 0 && (
               <button

@@ -64,7 +64,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (role === 'teacher') {
       const pass = teacherPasscode.trim();
       if (pass !== '0542836997' && pass !== 'prof2026' && pass !== 'admin') {
-        setErrorMsg('رمز المرور غير صحيح. يرجى إدخال رمز الأستاذ (0542836997).');
+        setErrorMsg('رمز المرور غير صحيح. يرجى إدخال الرمز السري الخاص بالأستاذ.');
         return;
       }
     }
@@ -204,7 +204,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <input
                 type="password"
                 required
-                placeholder="أدخل رمز الأستاذ (0542836997)..."
+                placeholder="أدخل رمز المرور السري للأستاذ..."
                 value={teacherPasscode}
                 onChange={(e) => {
                   setTeacherPasscode(e.target.value);

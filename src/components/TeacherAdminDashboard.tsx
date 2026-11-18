@@ -163,7 +163,7 @@ export const TeacherAdminDashboard: React.FC<TeacherAdminDashboardProps> = ({
       setAuthError(null);
       showToast('مرحباً بك أستاذي الكريم في لوحة التحكم والإدارة.');
     } else {
-      setAuthError('رمز المرور غير صحيح. يرجى إدخال الرمز السري للأستاذ (0542836997).');
+      setAuthError('رمز المرور غير صحيح. يرجى إدخال الرمز السري الخاص بالأستاذ.');
     }
   };
 

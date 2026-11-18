@@ -992,7 +992,7 @@ export default function App() {
             <span>·</span>
             <span>الطور المتوسط (1AM, 2AM, 3AM, 4AM BEM)</span>
             <span>·</span>
-            <span>لوحة الأستاذ المعتمدة برمز المرور (0542836997)</span>
+            <span>لوحة الأستاذ المعتمدة 🔒</span>
           </div>
 
           <div className="flex items-center gap-4">
