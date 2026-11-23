@@ -1,4 +1,4 @@
-import express, { Express, Request, Response } from 'express';
+import express, { Express, NextFunction, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
@@ -128,6 +128,24 @@ export function createApiApp(): Express {
 
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
+
+  // Diagnostic Request Logging Middleware (logs URL patterns & status codes to Vercel/Node logs)
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      const durationMs = Date.now() - startedAt;
+      const runtime = process.env.VERCEL ? 'vercel-serverless' : 'node-server';
+      const queryStr =
+        Object.keys(req.query || {}).length > 0 ? JSON.stringify(req.query) : '{}';
+      const logLine = `[${runtime}] ${req.method} originalUrl=${req.originalUrl} url=${req.url} path=${req.path} baseUrl=${req.baseUrl || '/'} query=${queryStr} status=${res.statusCode} duration=${durationMs}ms`;
+      if (res.statusCode >= 400) {
+        console.warn(logLine);
+      } else {
+        console.log(logLine);
+      }
+    });
+    next();
+  });
 
   // =================== API ROUTES ===================
 
@@ -420,8 +438,17 @@ export function createApiApp(): Express {
   });
 
   // Guard unmatched API routes from returning HTML
-  app.use('/api', (_req: Request, res: Response) => {
-    res.status(404).json({ error: 'API endpoint not found' });
+  app.use('/api', (req: Request, res: Response) => {
+    console.warn(
+      `[API-404] Unmatched route: method=${req.method} originalUrl=${req.originalUrl} url=${req.url} path=${req.path}`
+    );
+    res.status(404).json({
+      error: 'API endpoint not found',
+      method: req.method,
+      originalUrl: req.originalUrl,
+      url: req.url,
+      path: req.path,
+    });
   });
 
   return app;
