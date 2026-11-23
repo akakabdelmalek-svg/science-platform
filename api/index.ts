@@ -1,8 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import type { Request, Response } from 'express';
+import express, { Request, Response } from 'express';
+import diagnosticMiddleware from '../server-diagnostic.js';
 import { createApiApp } from '../serverApp.js';
 
-const app = createApiApp();
+const app = express();
+app.use(diagnosticMiddleware);
+app.use(createApiApp());
 
 // Catch-all for Vercel requests whose rewritten path may omit the /api prefix
 app.use((req: Request, res: Response) => {

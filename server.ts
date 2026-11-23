@@ -2,12 +2,15 @@ import express, { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import diagnosticMiddleware from './server-diagnostic.js';
 import { createApiApp, appMetadata } from './serverApp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const app = createApiApp();
+export const app = express();
+app.use(diagnosticMiddleware);
+app.use(createApiApp());
 
 const isProduction = process.env.NODE_ENV === 'production';
 // In AI Studio dev/preview nginx proxies port 8080 -> 3000 (DEFAULT_APP_PORT=3000).
